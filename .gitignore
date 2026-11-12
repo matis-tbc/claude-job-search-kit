@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+# personal files never belong in the kit
+config.toml
+Connections.csv
+messaged.tsv
