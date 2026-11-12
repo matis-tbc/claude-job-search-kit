@@ -25,6 +25,45 @@ The CLI (`scripts/cc.py`) is one stdlib-only Python file. It does every read and
 refuses drafts that use unverified numbers or em dashes, refuses people without a source URL, and never
 overwrites the fields and sections that belong to you.
 
+## Quick start: paste this into Claude Code
+
+Open a new Claude Code session in any folder and paste the prompt below. Fill in the three lines in
+brackets first, or delete them and Claude will ask. Claude installs the kit, runs the checks, then
+interviews you to fill in your config, Fact Sheet and Standard Answers. It asks before anything that
+would send, submit or spend money.
+
+```text
+Set up claude-job-search-kit for my job search and get me to my first shortlist.
+
+About me: [name, school, degree(s), graduation month and year, earliest start date]
+What I'm looking for: [role types, industries, cities or regions, and how much of my list should be in my home region]
+My notes folder: [path to an Obsidian vault or any folder, e.g. ~/Documents/Job Search]
+
+Do it in this order, and stop and show me the result after each step:
+1. Clone https://github.com/matis-tbc/claude-job-search-kit into ~/claude-job-search-kit and copy
+   skill/career-coach into ~/.claude/skills/career-coach. If that skill folder already exists, ask
+   before replacing it.
+2. Run `cc.py init --vault-path "<my notes folder>"`, then fill config.toml from what I told you
+   above. Ask me only for the values you can't fill. Show me the finished config.
+3. Run `cc.py setup`, `cc.py doctor --net` and `test_cc.py`. Tell me if anything fails.
+4. Read the README and skill/career-coach/SKILL.md so you know the rules: you never send or
+   submit anything, no paid tools, numbers about me only from verified Fact Sheet rows, a source
+   URL for every person, never guess an email, no em dashes.
+5. Interview me for the Fact Sheet. Ask for my resume (I'll paste it or give you the PDF path),
+   then go line by line: one row per number, title and date. Each row starts blocked, and I mark it
+   verified or decided. Keep it moving: skip small numbers that will never be printed.
+6. Fill Standard Answers with me: contact details, every degree as its own entry, GPA, start date,
+   work authorization, sponsorship, relocation, EEO (decline by default) and my work history with
+   exact titles and dates.
+7. Ask where my upload-ready resume PDFs are and record their exact file names.
+8. Run the first sweep ("what got posted this week"), skip anything that requires or prefers 3+
+   years, and give me a ranked shortlist of 5 with one line of reasoning each.
+9. Finish by writing the Next Session note so my next session can start with "where am I".
+```
+
+After that, use the phrases in the table above. A good second session is "prep the form for #1 and
+find me 2 people".
+
 ## Requirements
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code)
