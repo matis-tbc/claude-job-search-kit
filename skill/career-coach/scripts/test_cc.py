@@ -211,7 +211,8 @@ class CCTest(unittest.TestCase):
         r = self.run_cc("check", stdin="Congrats on the $140M raise.")
         self.assertEqual(r.returncode, 0)
         self.assertIn("WARN", r.stdout)
-        r = self.run_cc("check", "--allow", "$140M", stdin="Congrats on the $140M raise.")
+        r = self.run_cc("check", "--allow", "$140M",
+                        stdin="Congrats on the $140M raise. Would you have 10 minutes for a call on hiring?")
         self.assertIn("ok", r.stdout)
 
     def test_check_strict_makes_unknown_numbers_errors(self):
@@ -405,7 +406,8 @@ class CCTest(unittest.TestCase):
         self.run_cc("mark", "--person", "Sam Kim", "--outreach", "sent", "--date", "2026-10-31",
                     "--next-touch", "2026-11-14")
         out = self.run_cc("due", today=today).stdout
-        self.assertIn("2 items", out)
+        self.assertIn("3 items", out)
+        self.assertIn("| loop | Pat Lee | EMAIL DUE: email naming BizOps Associate", out)
         self.assertLess(out.index("| person | Pat Lee"), out.index("| company | Acme Robotics | Ping recruiter"))
         self.assertNotIn("application", out)
         self.assertNotIn("Sam Kim", out)
@@ -413,7 +415,7 @@ class CCTest(unittest.TestCase):
         self.assertIn("| application | Acme Robotics | BizOps Associate (applied 2026-11-01)", out)
         self.assertNotIn("Sam Kim", out)
         out = self.run_cc("due", "--days", "4", today=today).stdout
-        self.assertIn("4 items", out)
+        self.assertIn("5 items", out)
         self.assertIn("Sam Kim", out)
         status = self.run_cc("status", today=today).stdout
         self.assertIn("Pat Lee", status)
@@ -423,6 +425,120 @@ class CCTest(unittest.TestCase):
         self.run_cc("applied", "--company", "Nova Space", "--role", "Analyst", "--date", "2026-11-05")
         out = self.run_cc("due", today="2026-11-10").stdout
         self.assertIn("2026-11-08 (2 days overdue) | application | Nova Space | Analyst: applied with no named human", out)
+
+    def test_check_note_target_ask_and_hedges(self):
+        cfg = os.path.join(self.tmp.name, "premium.toml")
+        write_config(cfg, self.v)
+        text = open(cfg).read().replace("premium = false", "premium = true")
+        open(cfg, "w").write(text)
+        short = "Hi Sam, the new test site is a smart move. Would you have 10 minutes for a call on hiring?"
+        out = self.run_cc("check", "--kind", "note", stdin=short, config=cfg).stdout
+        self.assertIn("aim for 250 to 300", out)
+        out = self.run_cc("check", "--kind", "note", stdin="Hi Sam, open to connecting.", config=cfg).stdout
+        self.assertIn("does not end on a question", out)
+        out = self.run_cc("check", stdin="Hi Sam, it seems like the new site is big. Would you have 10 minutes?").stdout
+        self.assertIn("hedge 'seems like'", out)
+        r = self.run_cc("check", "--kind", "answer", stdin="I like building things.")
+        self.assertIn("ok", r.stdout)
+
+    # the apply loop
+    def test_mark_loop_fields(self):
+        self.company()
+        self.person()
+        pp = self.ppath()
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "sent", "--channel", "note", "--date", "2026-11-10")
+        self.run_cc("mark", "--person", "Pat Lee", "--accepted", "--date", "2026-11-11")
+        text = open(pp).read()
+        for want in ("channel: note", "sent_on: 2026-11-10", "accepted_on: 2026-11-11", "next_touch: 2026-11-17"):
+            self.assertIn(want, text)
+        self.run_cc("mark", "--person", "Pat Lee", "--email", "sent", "--date", "2026-11-14")
+        text = open(pp).read()
+        self.assertIn("email_on: 2026-11-14", text)
+        self.assertIn("last_contact: 2026-11-14", text)
+        self.assertIn("next_touch: 2026-11-21", text)
+        self.assertIn("sent_on: 2026-11-10", text)
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "replied", "--replied-via", "email",
+                    "--proof", "sponsors-54", "--tier", "1", "--date", "2026-11-15")
+        text = open(pp).read()
+        for want in ("replied_on: 2026-11-15", "replied_via: email", "proof: sponsors-54", "tier: 1"):
+            self.assertIn(want, text)
+        r = self.run_cc("mark", "--person", "Pat Lee", "--channel", "pigeon")
+        self.assertEqual(r.returncode, 2)
+        self.assertNotIn("pigeon", open(pp).read())
+
+    def test_loop_email_due_then_cleared(self):
+        self.company()
+        self.person()
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "sent", "--channel", "note", "--date", "2026-11-10")
+        self.run_cc("applied", "--company", "Acme Robotics", "--role", "BizOps Associate",
+                    "--resume", "Resume_Ops.pdf", "--date", "2026-11-11")
+        out = self.run_cc("loop", today="2026-11-14").stdout
+        self.assertIn("1 emails due", out)
+        self.assertIn("| Pat Lee | Acme Robotics | note | 2026-11-10 | BizOps Associate 2026-11-11 (Resume_Ops.pdf)", out)
+        self.assertIn("| 2026-11-14 | EMAIL DUE |", out)
+        self.assertIn("0 emails due", self.run_cc("loop", today="2026-11-13").stdout)
+        pp = self.ppath()
+        text = open(pp).read().replace("sent_on: 2026-11-10\n", "")  # an older note without sent_on
+        open(pp, "w").write(text)
+        self.run_cc("mark", "--person", "Pat Lee", "--email", "sent", "--date", "2026-11-14")
+        self.assertIn("sent_on: 2026-11-10", open(pp).read())
+        out = self.run_cc("loop", today="2026-11-14").stdout
+        self.assertIn("0 emails due", out)
+        self.assertIn("2026-11-21", out)
+
+    def test_loop_note_first_and_applied_cold(self):
+        self.company()
+        self.person()  # drafted, nobody contacted at Acme yet
+        self.run_cc("applied", "--company", "Acme Robotics", "--role", "BizOps Associate", "--date", "2026-11-11")
+        self.run_cc("applied", "--company", "Nova Space", "--role", "Analyst", "--date", "2026-11-11")
+        out = self.run_cc("loop", today="2026-11-12").stdout
+        self.assertIn("1 notes to send first, 1 applied cold", out)
+        self.assertIn("| (nobody) | Nova Space |", out)
+        rows = json.loads(self.run_cc("loop", "--json", today="2026-11-12").stdout)
+        self.assertEqual({r["flag"] for r in rows}, {"NOTE FIRST", "APPLIED COLD"})
+        due = self.run_cc("loop", "--due", "--applied-only", today="2026-11-12").stdout
+        self.assertIn("NOTE FIRST", due)
+
+    def test_metrics_rates(self):
+        self.company(people=["Pat Lee", "Sam Kim"])
+        self.person()
+        self.person("Sam Kim")
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "sent", "--channel", "inmail", "--date", "2026-11-10")
+        self.run_cc("mark", "--person", "Sam Kim", "--outreach", "sent", "--channel", "note", "--date", "2026-11-10")
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "replied", "--replied-via", "linkedin",
+                    "--date", "2026-11-12")
+        self.run_cc("applied", "--company", "Acme Robotics", "--role", "BizOps Associate", "--date", "2026-11-11")
+        out = self.run_cc("metrics", today="2026-11-14").stdout
+        self.assertIn("People contacted: 2. Replied: 1/2 (50%).", out)
+        self.assertIn("Median days to reply: 2", out)
+        self.assertIn("| inmail | 1 | 1/1 (100%) |", out)
+        self.assertIn("| note | 1 | 0/1 (0%) |", out)
+        self.assertIn("| with a contact or referral | 1 | 0/1 (0%) |", out)
+        self.assertIn("Small sample", out)
+        self.assertIn("People contacted: 0.", self.run_cc("metrics", "--since", "2026-11-11", today="2026-11-14").stdout)
+
+    def test_infer_proof_from_config_and_style(self):
+        cc = load_cc()
+        cfg = cc.load_config(type("A", (), {"config": self.cfg})())
+        cfg["proofs"] = [{"tag": "result-3rd", "pattern": r"3rd in the"},
+                         {"tag": "sponsors-54", "pattern": r"\b54 (corporate )?sponsors"}]
+        cc.configure(cfg)
+        self.assertEqual(cc.infer_proof("I closed 54 sponsors for our club."), "sponsors-54")
+        self.assertEqual(cc.infer_proof("We placed 3rd in the nation."), "result-3rd")
+        self.assertEqual(cc.infer_proof("No proof here."), "none")
+        cfg["proofs"] = []
+        self.assertEqual(cc.infer_proof("I closed 54 sponsors."), "none")
+        self.assertEqual(cc.infer_style("Hi Jo, what I find interesting about X is Y."), "my-take")
+        self.assertEqual(cc.infer_style("Hi Jo, congrats on the round."), "fact-hook")
+
+    def test_lint_flags_bad_channel(self):
+        self.company()
+        self.person()
+        text = open(self.ppath()).read()
+        open(self.ppath(), "w").write(re.sub(r"^outreach: .*$", "\\g<0>\nchannel: pigeon", text, count=1, flags=re.M))
+        r = self.run_cc("lint")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("channel 'pigeon'", r.stdout)
 
     def test_lint_flags_bad_enums(self):
         self.company()
@@ -525,6 +641,13 @@ class SweepFilters(unittest.TestCase):
             {"isRequired": True, "field": {"path": "_systemfield_name", "title": "Name"}},
             {"isRequired": False, "field": {"path": "x", "title": "Portfolio", "selectableValues": []}}]}]}}
         self.assertEqual(cc.ashby_form_lines(jp), ["- [optional] Portfolio"])
+
+    def test_transcript_flag(self):
+        cc = load_cc()
+        self.assertEqual(cc.transcript_flag("- [required] Why us?\n- [optional] Portfolio"), "")
+        self.assertIn("required: skip", cc.transcript_flag("- [required] Unofficial transcript"))
+        self.assertIn("optional", cc.transcript_flag("- [optional] Transcript (PDF)"))
+        self.assertIn("required", cc.transcript_flag("- Upload your transcript"))  # Lever: no marker
 
     def test_seed_boards_are_well_formed(self):
         seed = os.path.join(os.path.dirname(HERE), "data", "ats.tsv")

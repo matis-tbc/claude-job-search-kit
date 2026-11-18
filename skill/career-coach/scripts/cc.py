@@ -17,6 +17,8 @@ Subcommands:
   mark            record what the user did: --person X --outreach sent, or --company X --status talking
   applied         record an application on the company note (status, follow-up date, Applications block)
   due             one list of company next_date, person next_touch and application follow-ups due within N days
+  loop            the Apply Loop: per person, note sent, application, follow-up email, reply and the next step
+  metrics         reply, accept and screen rates by week, channel, person kind, warm path, tier, proof and style
   lint            scan skill-written notes for em dashes, missing sources, broken markers and bad enum values
   import-tracker  --dry-run: print the `applied` calls the Application Tracker table implies
   init            write a starter config file (never overwrites one that exists)
@@ -162,6 +164,7 @@ CONFIG_DEFAULTS = {
     "warm": {"people_dirs": {}, "org_contact_globs": [], "prenamed_glob": "", "alumni": []},
     "lanes": [],
     "phases": [],
+    "proofs": [],
 }
 
 
@@ -248,7 +251,15 @@ CADENCE = {
     "pending-withdraw": (14, "connection still pending: withdraw it"),
     "second-touch": (24, "last polite touch, then mark dormant"),
     "interview": (0, "send the thank-you note"),
+    "applied-email": (3, "applied and LinkedIn touch sent, no reply: send the follow-up email naming the role"),
+    "email-sent": (7, "no reply to the email: second contact at the company, or a last LinkedIn touch"),
 }
+
+# The Apply Loop (references/apply-loop.md): optional person fields that make the loop measurable.
+CHANNELS = ["note", "inmail", "open-profile", "email", "text", "intro"]
+REPLY_VIA = ["linkedin", "email", "text", "phone"]
+LOOP_KEYS = ["channel", "sent_on", "accepted_on", "email_drafted", "email_on", "replied_on", "replied_via",
+             "proof", "tier"]
 
 
 def cadence_date(event, day):
@@ -582,6 +593,7 @@ SLOP = ["hope this finds you well", "hope this message finds you", "i'm passiona
         "delve", "game-changer", "game changer", "synergy", "pick your brain", "i came across your profile",
         "thrilled", "leverage my", "esteemed", "i am writing to", "touch base", "circle back",
         "fast-paced environment", "rockstar", "ninja", "excited to connect"]
+HEDGES = ["i'd guess", "i would guess", "seems like", "looks like", "reads like", "i'm not sure but"]
 LIMITS = {"note": ("chars", 200), "message": ("words", 120), "email": ("words", 160), "answer": ("words", 300)}
 
 
@@ -603,6 +615,15 @@ def lint_text(text, kind, rows, allow=(), strict=False):
     size = len(text) if unit == "chars" else len(re.findall(r"\b\w[\w'’-]*\b", text))
     if size > limit:
         errors.append(f"{kind} is {size} {unit}; limit is {limit}.")
+    elif kind == "note" and size < limit - 50:
+        warns.append(f"note is {size} chars; aim for {limit - 50} to {limit} so the ask is a full sentence.")
+    if kind in ("note", "message", "email") and not text.rstrip().endswith("?"):
+        warns.append("does not end on a question. End with one full-sentence ask, e.g. "
+                     "'Would you have 10 minutes for a call on <their thing>?'")
+    low = text.lower()
+    for h in HEDGES:
+        if h in low:
+            warns.append(f"hedge '{h}'. State the observation plainly.")
     usable, blocked = fact_number_sets(rows)
     allow_keys = set()
     for a in allow:
@@ -1033,7 +1054,31 @@ def cmd_sweep(args):
     print("\n".join(lines))
 
 
+def transcript_flag(form_text):
+    """A one-line warning when a form asks for a transcript: required means skip the role, optional means leave
+    it blank. Lever labels carry no required marker, so a Lever transcript question reads as required."""
+    lines = [l for l in form_text.splitlines() if re.search(r"transcript", l, re.I)]
+    if not lines:
+        return ""
+    if any("[optional]" not in l for l in lines):
+        return "FLAG transcript required: skip this role unless the user says otherwise (references/apply-loop.md)."
+    return "FLAG transcript optional: leave the upload blank."
+
+
 def cmd_questions(args):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        questions_body(args)
+    out = buf.getvalue()
+    sys.stdout.write(out)
+    flag = transcript_flag(out)
+    if flag:
+        print(flag)
+
+
+def questions_body(args):
     ats, _, slug = args.ats.partition(":")
     if ats == "greenhouse":
         d = http_json(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs/{args.id}?questions=true")
@@ -1391,7 +1436,7 @@ def upsert_company(root, spec, force_human=False):
 # ---------------------------------------------------------------- people
 
 PERSON_ORDER = ["created", "updated", "tags", "company", "title", "kind", "warm", "via", "source", "linkedin",
-                "verify", "outreach", "last_contact", "next_touch"]
+                "verify", "outreach", "last_contact", "next_touch"] + LOOP_KEYS
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
 
@@ -1529,6 +1574,7 @@ def load_people(root):
         fm, body = read_note(path)
         if "career/research" in (fm.get("tags") or []):
             fm["_name"] = os.path.splitext(os.path.basename(path))[0]
+            fm["_career"] = get_block(body, "career") or ""
             out.append(fm)
     return out
 
@@ -1627,6 +1673,10 @@ def cmd_lint(args):
         if outreach not in ("", None) and outreach not in OUTREACH_STATUSES:
             print(f"outreach '{outreach}' is not one of {', '.join(OUTREACH_STATUSES)}: {rel}")
             problems += 1
+        channel = fm.get("channel")
+        if channel not in ("", None) and channel not in CHANNELS and "career/research" in (fm.get("tags") or []):
+            print(f"channel '{channel}' is not one of {', '.join(CHANNELS)}: {rel}")
+            problems += 1
     print(f"{len(enum_files)} files checked, {problems} problems.")
     sys.exit(1 if problems else 0)
 
@@ -1640,16 +1690,44 @@ def cmd_mark(args):
         text = open(path, encoding="utf-8").read()
         fm_raw, body = split_frontmatter(text)
         fm = parse_frontmatter(fm_raw) if fm_raw is not None else {}
+        if args.channel and args.channel not in CHANNELS:
+            die(f"channel must be one of {CHANNELS}")
+        if args.replied_via and args.replied_via not in REPLY_VIA:
+            die(f"replied-via must be one of {REPLY_VIA}")
+        if fm.get("outreach") == "sent" and not fm.get("sent_on") and as_date(fm.get("last_contact")):
+            fm["sent_on"] = str(fm["last_contact"])  # keep the first-touch date before last_contact moves
         if args.outreach:
             if args.outreach not in OUTREACH_STATUSES:
                 die(f"outreach must be one of {OUTREACH_STATUSES}")
             fm["outreach"] = args.outreach
             if args.outreach in ("sent", "replied", "meeting"):
                 fm["last_contact"] = day
+        if args.outreach == "sent" and not fm.get("sent_on"):
+            fm["sent_on"] = day
+        if args.outreach in ("replied", "meeting") and not fm.get("replied_on"):
+            fm["replied_on"] = day
+        if args.channel:
+            fm["channel"] = args.channel
+        if args.replied_via:
+            fm["replied_via"] = args.replied_via
+            fm["replied_on"] = fm.get("replied_on") or day
+        if args.accepted:
+            fm["accepted_on"] = day
+        if args.proof:
+            fm["proof"] = args.proof
+        if args.tier is not None:
+            fm["tier"] = args.tier
+        if args.email == "drafted":
+            fm["email_drafted"] = day
+        elif args.email == "sent":
+            fm["email_on"] = day
+            fm["last_contact"] = day
         if args.next_touch:
             fm["next_touch"] = args.next_touch
         elif args.event or args.outreach == "sent":
             fm["next_touch"] = cadence_date(args.event or "note-sent", day)
+        elif args.email == "sent":
+            fm["next_touch"] = cadence_date("email-sent", day)
         fm["updated"] = TODAY.isoformat()
         open(path, "w", encoding="utf-8").write(dump_frontmatter(fm, PERSON_ORDER) + body)
         print(f"marked {os.path.relpath(path, root)}: outreach {fm.get('outreach')}, last_contact "
@@ -1820,6 +1898,10 @@ def collect_due(comps, people, days):
         if nt:
             items.append({"date": nt, "kind": "person", "name": p["_name"],
                           "what": f"follow up (outreach {o}, last contact {p.get('last_contact') or '-'})"})
+    for r in loop_rows(comps, people):
+        if r["flag"] in ("EMAIL DUE", "NOTE FIRST") and r["due"]:  # APPLIED COLD is already an application item
+            items.append({"date": r["due"], "kind": "loop", "name": r["person"],
+                          "what": f"{r['flag']}: {r['step']}"})
     items = [i for i in items if i["date"] <= cutoff]
     items.sort(key=lambda i: (i["date"], i["kind"], i["name"]))
     return items
@@ -1842,6 +1924,197 @@ def cmd_due(args):
           f" {len(items)} items")
     for i in items:
         print(format_due(i))
+
+
+# ---------------------------------------------------------------- the apply loop: touch, apply, email, measure
+
+# Opener style: a first-person take ("what I find interesting about X is ...") or a fact hook.
+TAKE_RE = re.compile(r"what I find interesting|\bto me\b|what I like|what draws me|what pulls me|"
+                     r"I keep coming back|the smart part|the interesting", re.I)
+
+
+def proof_patterns():
+    """(tag, regex) pairs from the config's [[proofs]] tables, used to tag which proof point a sent draft used."""
+    out = []
+    for p in (CFG or {}).get("proofs") or []:
+        tag, pat = str(p.get("tag") or "").strip(), str(p.get("pattern") or "")
+        if tag and pat:
+            try:
+                out.append((tag, re.compile(pat, re.I)))
+            except re.error as e:
+                die(f"[[proofs]] tag '{tag}': bad pattern ({e}). Fix the regex in {config_path()}.")
+    return out
+
+
+def sent_text(p):
+    """The draft that most likely went out: the note for a connection request, else the message."""
+    blk = p.get("_career") or ""
+    note = re.search(r"connection note\*\*[^\n]*\n\n> ([^\n]*)", blk)
+    msg = re.search(r"LinkedIn message\*\*[^\n]*\n\n> ([^\n]*)", blk)
+    if p.get("channel") == "note" and note:
+        return note.group(1)
+    return (msg or note).group(1) if (msg or note) else ""
+
+
+def infer_proof(text):
+    hits = [(m.start(), tag) for tag, rx in proof_patterns() for m in [rx.search(text)] if m]
+    return min(hits)[1] if hits else "none"
+
+
+def infer_style(text):
+    return "my-take" if TAKE_RE.search(text) else "fact-hook"
+
+
+def person_company(p):
+    return str(p.get("company") or "").strip().strip("[]").split("|")[0]
+
+
+def loop_rows(comps, people):
+    """One row per contacted person (plus drafted people at companies with an application), and one per
+    application with no contacted person. Each row carries the next step and the date it is due."""
+    by_co = {norm_company(c["_name"]): c for c in comps}
+    live_states = ("sent", "replied", "meeting", "dormant", "closed")
+    live_cos = {norm_company(person_company(p)) for p in people if (p.get("outreach") or "") in live_states}
+    rows, contacted_cos = [], set()
+    for p in people:
+        o = p.get("outreach") or "not-contacted"
+        c = by_co.get(norm_company(person_company(p)))
+        apps = [a for a in (c or {}).get("_apps", []) if as_date(a.get("applied"))]
+        app = max(apps, key=lambda a: a["applied"]) if apps else None
+        live = o in live_states
+        # a drafted person counts only when nobody at the company has been contacted yet
+        if not live and not (app and o in ("drafted", "not-contacted")
+                             and norm_company(person_company(p)) not in live_cos):
+            continue
+        sent = as_date(p.get("sent_on")) or (as_date(p.get("last_contact")) if live else None)
+        replied = o in ("replied", "meeting") or bool(as_date(p.get("replied_on")))
+        email_on = as_date(p.get("email_on"))
+        applied = as_date(app["applied"]) if app else None
+        step, due, flag = "", None, ""
+        if o in ("dormant", "closed"):
+            step = o
+        elif replied:
+            step, due = "replied: answer and book the call", as_date(p.get("next_touch"))
+        elif not live:
+            step, due, flag = f"applied {app['applied']}: send the LinkedIn note first", TODAY, "NOTE FIRST"
+        elif email_on:
+            step = f"email sent {email_on}: {CADENCE['email-sent'][1]}"
+            due = email_on + dt.timedelta(days=CADENCE["email-sent"][0])
+        elif applied and sent:
+            due = max(applied, sent) + dt.timedelta(days=CADENCE["applied-email"][0])
+            step = f"email naming {app['role']}"
+            flag = "EMAIL DUE" if due <= TODAY else ""
+        elif sent:
+            due = sent + dt.timedelta(days=CADENCE["applied-email"][0])
+            step = "no application: apply if a role fits, else the day-3 email"
+        if c:
+            contacted_cos.add(norm_company(c["_name"]))
+        rows.append({"person": p["_name"], "company": person_company(p), "channel": p.get("channel") or "",
+                     "sent": sent, "accepted": as_date(p.get("accepted_on")),
+                     "applied": f"{app['role']} {app['applied']} ({app.get('resume') or '-'})" if app else "",
+                     "email": email_on or (f"drafted {p.get('email_drafted')}" if p.get("email_drafted") else ""),
+                     "replied": as_date(p.get("replied_on")) or (o if replied else ""),
+                     "step": step, "due": due, "flag": flag})
+    for c in comps:
+        if norm_company(c["_name"]) in contacted_cos or c.get("status") in ("closed", "parked"):
+            continue
+        for a in c.get("_apps", []):
+            d = as_date(a.get("applied"))
+            if not d:
+                continue
+            who = a.get("referral") or ""
+            rows.append({"person": who or "(nobody)", "company": c["_name"], "channel": "referral" if who else "",
+                         "sent": None, "accepted": None,
+                         "applied": f"{a['role']} {a['applied']} ({a.get('resume') or '-'})",
+                         "email": "", "replied": "",
+                         "step": "referral: thank them, tell them it is in" if who else CADENCE["applied-no-human"][1],
+                         "due": d + dt.timedelta(days=CADENCE["applied-no-human"][0]) if not who else None,
+                         "flag": "" if who else "APPLIED COLD"})
+    rows.sort(key=lambda r: (r["due"] or dt.date.max, r["company"], r["person"]))
+    return rows
+
+
+def cmd_loop(args):
+    root = vault_root(args)
+    rows = loop_rows(load_companies(root), load_people(root))
+    if args.due:
+        cutoff = TODAY + dt.timedelta(days=args.days)
+        rows = [r for r in rows if r["due"] and r["due"] <= cutoff and r["step"] not in ("dormant", "closed")]
+    if args.applied_only:
+        rows = [r for r in rows if r["applied"]]
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+        return
+    print(f"# Apply Loop, {TODAY.isoformat()}: {len(rows)} rows "
+          f"({sum(1 for r in rows if r['flag'] == 'EMAIL DUE')} emails due, "
+          f"{sum(1 for r in rows if r['flag'] == 'NOTE FIRST')} notes to send first, "
+          f"{sum(1 for r in rows if r['flag'] == 'APPLIED COLD')} applied cold)")
+    print("| Person | Company | Channel | Sent | Applied | Email | Replied | Next step | Due | Flag |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for r in rows:
+        cells = [r["person"], r["company"], r["channel"], r["sent"], r["applied"], r["email"], r["replied"],
+                 r["step"], r["due"], r["flag"]]
+        print("| " + " | ".join(str(x or "-").replace("|", "/") for x in cells) + " |")
+
+
+def rate(k, n):
+    return f"{k}/{n} ({round(100 * k / n)}%)" if n else "0/0"
+
+
+def cmd_metrics(args):
+    """Reply, accept and screen rates from person frontmatter and Applications blocks."""
+    root = vault_root(args)
+    comps, people = load_companies(root), load_people(root)
+    since = as_date(args.since) if args.since else None
+    sent = []
+    for p in people:
+        o = p.get("outreach") or ""
+        d = as_date(p.get("sent_on")) or as_date(p.get("last_contact"))
+        if o not in ("sent", "replied", "meeting", "dormant", "closed") or not d or (since and d < since):
+            continue
+        text = sent_text(p)
+        replied = o in ("replied", "meeting") or bool(as_date(p.get("replied_on")))
+        sent.append({"name": p["_name"], "co": norm_company(person_company(p)), "sent": d, "replied": replied,
+                     "replied_on": as_date(p.get("replied_on")), "via": p.get("replied_via") or "",
+                     "channel": p.get("channel") or "unknown", "accepted": bool(as_date(p.get("accepted_on"))),
+                     "email": bool(as_date(p.get("email_on"))), "proof": p.get("proof") or infer_proof(text),
+                     "style": infer_style(text), "kind": p.get("kind") or "unknown",
+                     "warm": p.get("warm") or "unknown", "tier": str(p.get("tier") or "unset"),
+                     "week": (d - dt.timedelta(days=d.weekday())).isoformat()})
+    n = len(sent)
+    print(f"# Outreach metrics, {TODAY.isoformat()}{' since ' + since.isoformat() if since else ''}")
+    print(f"People contacted: {n}. Replied: {rate(sum(s['replied'] for s in sent), n)}.")
+    days = sorted((s["replied_on"] - s["sent"]).days for s in sent if s["replied_on"])
+    if days:
+        print(f"Median days to reply: {days[len(days) // 2]} (n={len(days)}).")
+    notes = [s for s in sent if s["channel"] == "note"]
+    print(f"Connection notes accepted: {rate(sum(s['accepted'] for s in notes), len(notes))} "
+          f"(only counts accepts recorded with mark --accepted).")
+    emails = [s for s in sent if s["email"]]
+    print(f"Follow-up emails sent: {len(emails)}. Replies by email: "
+          f"{rate(sum(1 for s in emails if s['via'] == 'email'), len(emails))}.")
+    for key, label in (("week", "week sent (newer weeks have had less time to reply)"),
+                       ("channel", "first-touch channel"), ("kind", "person kind"), ("warm", "warm path"),
+                       ("tier", "tier"), ("proof", "proof point"), ("style", "opener style")):
+        groups = {}
+        for s in sent:
+            groups.setdefault(s[key], []).append(s)
+        print(f"\n## By {label}\n| {label} | contacted | replied |\n|---|---|---|")
+        for g, ss in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+            print(f"| {g} | {len(ss)} | {rate(sum(x['replied'] for x in ss), len(ss))} |")
+    contacted = {s["co"] for s in sent}
+    apps = [(c, a) for c in comps for a in c.get("_apps", []) if as_date(a.get("applied"))
+            and not (since and as_date(a["applied"]) < since)]
+    screened = lambda c: c.get("status") in ("interviewing", "offer")
+    warm = [(c, a) for c, a in apps if norm_company(c["_name"]) in contacted or a.get("referral")]
+    cold = [(c, a) for c, a in apps if (c, a) not in warm]
+    print(f"\n## Applications\nApplications: {len(apps)}. Reached a screen (company status interviewing or offer): "
+          f"{rate(sum(screened(c) for c, _ in apps), len(apps))}.")
+    print(f"| applied | apps | screen |\n|---|---|---|\n| with a contact or referral | {len(warm)} | "
+          f"{rate(sum(screened(c) for c, _ in warm), len(warm))} |\n| cold | {len(cold)} | "
+          f"{rate(sum(screened(c) for c, _ in cold), len(cold))} |")
+    if n < 30:
+        print(f"\nSmall sample ({n} contacted): read these as direction, not proof. Revisit after 30+.")
 
 
 def split_md_row(line):
@@ -2086,6 +2359,12 @@ def main():
     s.add_argument("--next-date"); s.add_argument("--date", help="YYYY-MM-DD, default today")
     s.add_argument("--event", choices=list(CADENCE),
                    help="set next_touch from the cadence table (default for --outreach sent: note-sent, 7 days)")
+    s.add_argument("--channel", help="first-touch channel: " + ", ".join(CHANNELS))
+    s.add_argument("--accepted", action="store_true", help="the connection request was accepted (accepted_on)")
+    s.add_argument("--email", choices=["drafted", "sent"], help="the follow-up email was drafted or sent")
+    s.add_argument("--replied-via", help="where the reply came: " + ", ".join(REPLY_VIA))
+    s.add_argument("--proof", help="proof-point tag used (a [[proofs]] tag in the config; else inferred)")
+    s.add_argument("--tier", type=int, help="send-list tier, 1 to 3")
     s.set_defaults(fn=cmd_mark)
     s = sub.add_parser("applied", help="record an application the user submitted (only when they say so)")
     s.add_argument("--company", required=True); s.add_argument("--role", required=True)
@@ -2096,6 +2375,12 @@ def main():
     s = sub.add_parser("due", help="everything due within N days, one list sorted by date")
     s.add_argument("--days", type=int, default=0, help="0 = today or overdue (default)")
     s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_due)
+    s = sub.add_parser("loop", help="the Apply Loop: per person, note, application, email, reply, next step")
+    s.add_argument("--due", action="store_true", help="only rows due within --days")
+    s.add_argument("--days", type=int, default=0); s.add_argument("--applied-only", action="store_true")
+    s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_loop)
+    s = sub.add_parser("metrics", help="reply, accept and screen rates by channel, proof, style, tier")
+    s.add_argument("--since", help="YYYY-MM-DD: only outreach and applications on or after"); s.set_defaults(fn=cmd_metrics)
     s = sub.add_parser("lint"); s.set_defaults(fn=cmd_lint)
     s = sub.add_parser("import-tracker", help="read Application Tracker.md; --dry-run prints the applied calls")
     s.add_argument("--dry-run", action="store_true"); s.add_argument("--file", help="tracker path (default: vault)")
