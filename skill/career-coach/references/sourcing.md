@@ -34,7 +34,8 @@ or launch.
    - `Crunchbase News biggest funding rounds week <date>`
 4. **VC portfolios** that fit the user's lanes. JavaScript-rendered portfolios return an empty shell to
    WebFetch; search `"<VC>" led Series <sector> <Year>` instead.
-5. **Job boards** for roles at companies you did not know: Built In (city editions), Y Combinator's Work
+5. **Job boards** for roles at companies you did not know: Indeed (when the Indeed connector is available
+   in Claude, its job search is free to use), Built In (city editions), Y Combinator's Work
    at a Startup, Welcome to the Jungle, `site:jobs.ashbyhq.com "business operations"` style searches.
    Then go back to step 3 for that company's stage and a better hook.
 

@@ -141,7 +141,7 @@ most one company whose only signal is a job posting for every 4 on the list.
 | "do the whole thing", "full run" | **full** | Steps 1 to 8 for the top 5 by fit |
 | "prep the form for X", "form prep" | **form prep** | `cc.py questions` (a transcript FLAG means skip), answers from Standard Answers, essays in full from the Story Bank, a Form Prep note from the template |
 | "apply: <url>", "fill the form" | **apply** | Form prep, essays written in full from the Story Bank, a cover letter per `references/cover-letter.md`, then fill in Claude in Chrome per `references/browser-apply.md` (up to five tabs); stop before Submit |
-| "apply loop", "who gets an email", "follow up on applications", "what's working", "metrics" | **apply loop** | `references/apply-loop.md`: `cc.py loop --due --days 3` for the next steps (EMAIL DUE, NOTE FIRST, APPLIED COLD), touch, apply, draft the day-3 emails, log with `mark --channel`, `--accepted`, `--email drafted|sent`, `--replied-via`; `cc.py metrics` for reply, accept and screen rates |
+| "apply loop", "who gets an email", "follow up on applications", "what's working", "metrics" | **apply loop** | `references/apply-loop.md`: `cc.py loop --due --days 3` for the next steps (EMAIL DUE, NOTE FIRST, APPLIED COLD), touch, apply, draft the day-3 emails, log with `mark --channel`, `--accepted`, `--email drafted` or `sent`, `--replied-via`; `cc.py metrics` for reply, accept and screen rates |
 | "stage the notes", "stage Jane" | **stage** | LinkedIn staging per `references/browser-apply.md`; stop before Send |
 | "where am I" | **status** | `cc.py status`, then advise the 3 next moves |
 | "what's due", "what do I follow up on" | **due** | `cc.py due` (`--days 7` for the week), then the 3 next moves |
