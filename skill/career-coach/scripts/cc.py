@@ -210,6 +210,7 @@ def configure(cfg):
         "people": p["people"].rstrip("/"),
         "target_companies": f"{js}/Target Companies.md",
         "connectors": f"{js}/Connectors.md",
+        "story_bank": f"{js}/Story Bank.md",
         "tracker": f"{js}/Application Tracker.md",
         "standard_answers": p["standard_answers"],
         "next_session": p["next_session"],
@@ -2201,6 +2202,7 @@ TEMPLATE_TARGETS = {  # template file -> PATHS key it is copied to by `setup` (o
     "Next Session.md": "next_session",
     "Application Tracker.md": "tracker",
     "Connectors.md": "connectors",
+    "Story Bank.md": "story_bank",
 }
 
 
@@ -2286,7 +2288,7 @@ def cmd_setup(args):
             made.append(PATHS[key] + "/")
     tdir = os.path.join(SKILL_DIR, "templates")
     for fname in sorted(os.listdir(tdir)) if os.path.isdir(tdir) else []:
-        if not fname.endswith(".md"):
+        if not fname.endswith((".md", ".tex")):  # .tex: the cover-letter template
             continue
         key = TEMPLATE_TARGETS.get(fname)
         dest = vp(root, key) if key else os.path.join(root, CFG["paths"]["job_search"], "Templates", fname)

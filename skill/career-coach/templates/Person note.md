@@ -14,10 +14,12 @@ verify: false
 outreach: drafted
 last_contact:
 next_touch:
+channel:
+sent_on:
 ---
 # Jordan Sample
 
-This is the format `cc.py upsert-person` writes. You never need to copy it by hand: Claude writes person notes through the script, which refuses a person with no source URL and any email address without a public source. Everything inside the `cc:career` markers belongs to the script; `outreach`, `last_contact`, `next_touch` and the Notes section belong to you.
+This is the format `cc.py upsert-person` writes. You never need to copy it by hand: Claude writes person notes through the script, which refuses a person with no source URL and any email address without a public source. Everything inside the `cc:career` markers belongs to the script; `outreach`, `last_contact`, `next_touch` and the Notes section belong to you. The Apply Loop fields (`channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`, `tier`) are written by `cc.py mark` when you say what happened.
 
 ## Career outreach
 <!-- cc:career -->
@@ -29,13 +31,13 @@ This is the format `cc.py upsert-person` writes. You never need to copy it by ha
 ### Opener drafts (2026-11-01, phase: relationship)
 Hook: opened a second test site (2026-10-20, https://example.com/news/test-site)
 
-**LinkedIn connection note** (175 chars):
+**LinkedIn connection note** (268 chars):
 
-> Hi Jordan, congrats on the new test site. I led sponsorships for our robotics club (12 sponsors) and want to work in ops. Would you have 10 minutes for a quick call next week?
+> Hi Jordan, what I find interesting about the second test site is that field testing starts before the factory is done, so ops runs two schedules at once. I closed 12 corporate sponsors for our robotics club. Would you have 10 minutes for a call on how your team hires?
 
-**LinkedIn message** (67 words):
+**LinkedIn message** (68 words):
 
-> Hi Jordan, congrats on getting the second test site open. I'm a senior at State University studying CS and Economics, and I led sponsorships for our robotics club, where we closed 12 corporate sponsors. I start full time in August 2027 and business operations at a hardware company is exactly the work I want. Would you have 10 minutes for a quick call this week or next?
+> Hi Jordan, what I find interesting about the second test site is that it puts field testing ahead of the factory build, which makes planning the hard part. That is the work I want after I finish at State University in May. I led sponsorships for our robotics club and closed 12 corporate sponsors. Would you have 10 minutes for a call on how your operations team hires?
 <!-- /cc:career -->
 
 ## Notes

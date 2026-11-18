@@ -135,6 +135,8 @@ class CCTest(unittest.TestCase):
         self.assertTrue(os.path.exists(fs))
         self.assertTrue(os.path.exists(os.path.join(fresh, "Career/Job Search/Standard Answers.md")))
         self.assertTrue(os.path.exists(os.path.join(fresh, "Career/Job Search/Templates/Form Prep.md")))
+        self.assertTrue(os.path.exists(os.path.join(fresh, "Career/Job Search/Story Bank.md")))
+        self.assertTrue(os.path.exists(os.path.join(fresh, "Career/Job Search/Templates/cover_letter_template.tex")))
         ats = os.path.join(fresh, "Career/Job Search/Data/ats.tsv")
         self.assertGreater(len(open(ats).read().splitlines()), 50)
         open(fs, "w").write("MINE")
