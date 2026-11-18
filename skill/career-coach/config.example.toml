@@ -1,0 +1,99 @@
+# job-search-kit config. Copy to ~/.config/job-search-kit/config.toml (or run `cc.py init`)
+# and replace every example value. Everything personal lives here or in your vault, never in the skill.
+# Format: TOML. Keep arrays on one line and quote every string; the stdlib fallback parser
+# (used on Python 3.9 and 3.10) reads only that subset.
+
+[profile]
+name = "Alex Example"
+first_name = "Alex"
+school = "State University"
+school_short = "State"                     # how you say it in a note ("fellow State grad")
+degrees = ["B.S. Computer Science", "B.A. Economics"]
+graduation = "May 2027"
+start_date = "August 2027"                 # earliest full-time start
+home_city = "Springfield, IL"
+# Two or three lines you actually wrote to someone, so drafts can match your voice.
+voice_samples = ["Hi Sam, hope your week is off to a good start.", "Thanks again for your time, I really enjoyed hearing how the team works."]
+
+[paths]
+# The vault is any folder of markdown files: an Obsidian vault, or a plain folder you open in any editor.
+vault = "~/Documents/Job Search Vault"
+# Everything below is relative to the vault.
+fact_sheet = "Career/Resume/Fact Sheet.md"
+job_search = "Career/Job Search"           # Companies/, Runs/, Data/ and the notes below live here
+people = "People"                          # where new contact notes are written
+resume_dir = "Career/Resume/Ready to Send" # upload-ready PDFs only
+standard_answers = "Career/Job Search/Standard Answers.md"
+next_session = "Career/Job Search/Next Session.md"
+# Folders Claude must never edit (journals, private notes). Reads are fine, writes are not.
+protected = ["Journal"]
+
+[search]
+# Home region share: at least this fraction of every shortlist is in your home region.
+# Set home_region_share = 0 to turn the quota off.
+home_region = "Illinois"
+home_region_share = 0.25
+# Lowercase regex matched against a posting's location to tag it as home region.
+home_region_pattern = "illinois|chicago|springfield|evanston|naperville|\\bil\\b"
+# Cities you would enjoy living in: a small scoring plus, never a deal breaker.
+fun_cities = ["Chicago", "Austin", "Seattle", "New York", "San Francisco Bay Area", "Boston"]
+stage_band = "Series A to C"
+signal_days = 60                           # a company needs a dated signal inside this many days
+max_years = 2                              # vetting: skip roles that require OR prefer 3+ years
+families = ["ops", "bd", "fin", "pm", "gtm"]
+us_only = true
+
+[linkedin]
+premium = false                            # true: 300-character connection notes; false: 200
+# note_limit = 200                         # set to override
+# `cc.py check --kind note` warns below (limit - 50), so a 300 limit means notes of 250 to 300 characters:
+# room for a first-person take, one proof and a full-sentence ask ("Would you have 10 minutes for a call on X?").
+
+[warm]
+# Extra folders of people notes, each with the label warm paths show for it.
+# A person already in one of these folders is never duplicated: the skill adds a block to that note.
+alumni = ["State University", "State Robotics Club"]
+prenamed_glob = ""                         # optional: TSVs with company, name, title, source, why columns
+org_contact_globs = []                     # optional: notes with frontmatter company and contact_name
+
+[warm.people_dirs]
+coworker = "Work/People"
+club = "Clubs/People"
+
+# Lanes: the kinds of roles you are aiming for, in priority order. Used for scoring and shortlist shape.
+[[lanes]]
+id = "A"
+name = "Operations, BD and special projects at hardware startups"
+weight = 15
+
+[[lanes]]
+id = "B"
+name = "Technical go-to-market at AI or SaaS companies"
+weight = 10
+
+# Search phases decide what an opener asks for. The first phase whose `until` is on or after today wins.
+# A role with an open req always gets the application ask, whatever the phase.
+[[phases]]
+name = "relationship"
+until = "2026-12-31"
+advice = "Build relationships. Ask for a short call to learn how the team hires and when reqs for an August 2027 start open."
+
+[[phases]]
+name = "application"
+until = "2027-03-31"
+advice = "Apply. Name the open req, ask for a referral or a call with the hiring manager, say you start August 2027."
+
+[[phases]]
+name = "close"
+advice = "Closing offers. Follow-ups, thank-yous and negotiation only."
+
+# Proof points: one tag per proof you cite in outreach, and a regex that finds it in a sent draft.
+# `cc.py metrics` groups reply rates by these tags (set one explicitly with `cc.py mark --proof <tag>`).
+# Use the same wording as your verified Fact Sheet rows. Quote every pattern and double each backslash.
+[[proofs]]
+tag = "sponsors-12"
+pattern = "\\b12 (corporate )?sponsors"
+
+[[proofs]]
+tag = "result-2nd"
+pattern = "2nd of 20"

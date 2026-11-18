@@ -1,0 +1,37 @@
+% Cover letter template (job-search kit). Procedure: references/cover-letter.md.
+% Copy to cover_letter_<company>.tex next to your resume sources, replace every [BRACKET],
+% and keep the body at about 150 to 200 words. Numbers only from verified or decided Fact Sheet rows.
+% ATS text extraction: type every "ff" as f\kern0pt f (of\kern0pt fice, ef\kern0pt fort, dif\kern0pt ferent).
+% Some engines store "ff" as one ligature glyph that keyword search misses; {} does not break it, \kern0pt does.
+% After building, check: pdftotext cover_letter_<company>.pdf - | grep -c $'\xef\xac\x80'   (expect 0)
+% Build: tectonic cover_letter_<company>.tex   (or pdflatex / xelatex)
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={Alex Example, Cover Letter},pdfauthor={Alex Example}}
+\usepackage{parskip}
+\usepackage{xcolor}
+\newcommand{\clicklink}[2]{\href{#1}{\textcolor{blue}{\underline{#2}}}}
+\pagestyle{empty}
+\begin{document}
+\textbf{\Large Alex Example}\\
+Springfield, IL $|$ \href{mailto:alex@example.com}{alex@example.com} $|$ \clicklink{https://www.linkedin.com/in/your-profile/}{linkedin.com/in/your-profile} $|$ \clicklink{https://example.com}{Website}
+
+\vspace{1em}
+Re: [ROLE TITLE]
+
+% 1. Company hook: who you are, then one or two plain-language sentences on something real and recent
+%    the company did, written as what you find interesting about it. No jargon unless the role needs it.
+I'm a State University senior finishing degrees in Computer Science and Economics in May 2027, and I want to start at [COMPANY] in August 2027. [WHAT I FIND INTERESTING ABOUT SOMETHING REAL AND RECENT THEY DID, IN PLAIN WORDS, AND WHY IT MATTERS.]
+
+% 2. One bridge: the link between your experience and their problem, in one or two sentences.
+[ONE BRIDGE: e.g. "I have run a smaller version of that job: getting a new tool adopted by people who were happy with the old one."]
+
+% 3. One proof: a single short paragraph, Fact Sheet numbers only.
+[ONE PROOF: e.g. "As sponsorship lead for our robotics club I closed 12 corporate sponsors, which funded the season's build."]
+
+% 4. Close on the team and the office, one line.
+I'd love to bring that to the [TEAM NAME] team in [OFFICE CITY].
+
+Alex Example
+\end{document}
