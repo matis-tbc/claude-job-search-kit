@@ -43,7 +43,7 @@ not required; `cc.py status` and `cc.py due` print the same information.
 | `fit`, `stage`, `last_round`, `hq`, `home_region`, `best_role`, `roles_open`, `signal`, `signal_date`, `warm`, `lane`, `sector`, `domain`, `updated` | skill | overwritten each run when provided |
 | `status`, `priority`, `next_action`, `next_date` | user | set only when empty; `--force-human` only if they asked |
 | `outreach`, `last_contact`, `next_touch` (people) | user | set only when empty |
-| `channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`, `tier` (people) | user, via `cc.py mark` | written only by `mark` on the user's say-so; read by `loop` and `metrics` |
+| `channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`, `tier`, `earlier_rounds` (people) | user, via `cc.py mark` | written only by `mark` on the user's say-so; read by `loop` and `metrics` |
 | `<!-- cc:x -->` blocks | skill | replaced (signals and people are merged, log is appended) |
 | `## Notes` and anything outside blocks | user | never touched |
 
@@ -54,11 +54,16 @@ other value. When the user says they sent something, run `cc.py mark --person X 
 `research` or `reach-out`). When they say they applied, run `cc.py applied`.
 
 Apply Loop flags on `mark --person X` (`apply-loop.md`): `--channel note|inmail|open-profile|email|text|intro`
-(first touch; `sent_on` is set once on the first `--outreach sent` and never moves), `--accepted`
-(`accepted_on`), `--email drafted|sent` (`email_drafted`, `email_on`; `sent` also sets `last_contact` and
-`next_touch` 7 days out), `--replied-via linkedin|email|text|phone` (`replied_via`, and `replied_on` if
-empty), `--proof <tag>` (a `[[proofs]]` tag from the config; otherwise `metrics` infers it from the sent
-draft) and `--tier 1|2|3`. `cc.py lint` flags a `channel` outside that list.
+(first touch; `sent_on` is set on the first `--outreach sent` of a round and does not move until a new
+round), `--accepted` (`accepted_on`, `next_touch` the next day for the message), `--email drafted|sent`
+(`email_drafted`, `email_on`; `sent` also sets `last_contact` and `next_touch` 7 days out, and on a person
+not yet contacted it counts as the first touch: `outreach: sent`, `channel: email`), `--replied-via
+linkedin|email|text|phone` (`replied_via`, `replied_on` if empty, and `outreach: replied`), `--proof <tag>`
+(a `[[proofs]]` tag from the config; otherwise `metrics` infers it from the draft matching the channel) and
+`--tier 1|2|3`. A new `--outreach sent` after `replied`, `meeting`, `dormant` or `closed` starts a new
+round: the old loop dates move to `earlier_rounds` so `loop` and `metrics` see the new send, not the old
+reply. Person flags without `--person`, bad dates and multi-line values exit 2 and change nothing.
+`cc.py lint` flags a `channel` outside that list.
 
 ## Applications block (`cc.py applied`)
 

@@ -87,7 +87,7 @@ send the note the same day (`cc.py loop` flags this `NOTE FIRST`).
 
 ## The follow-up email (template)
 
-Under 120 words, `cc.py check --kind email`, no em dashes, a first-person take, one proof, one ask.
+Aim for under 120 words (`cc.py check --kind email` hard-stops at 160), no em dashes, a first-person take, one proof, one ask.
 Attach the resume that went with the application. Subject: a short phrase about their thing, not about
 the user.
 
@@ -104,12 +104,12 @@ work for less or for equity in writing (save that for a call, if ever).
 
 | Question | Where the data comes from |
 |---|---|
-| Reply rate overall and by week sent | `outreach`, `sent_on` (else `last_contact`), `replied_on` |
+| Reply rate overall and by week sent | `outreach`, `sent_on` (else `last_contact` while outreach is still `sent`; older notes past `sent` show as week `undated`), `replied_on` |
 | Connection-note acceptance rate | `channel: note` and `accepted_on` (record accepts with `--accepted`) |
 | Reply rate by channel: note, InMail, Open Profile, email | `channel`, `replied_via`, `email_on` |
 | Reply rate by person kind, warm path and tier | `kind`, `warm`, `tier` |
 | Reply rate by proof point and opener style | `proof` (else matched from the sent draft with the config's `[[proofs]]` patterns) and style (`my-take` vs `fact-hook`) |
-| Application to screen, with a contact vs cold | Applications blocks plus company status `interviewing` or `offer` |
+| Application to screen, with a contact vs cold | Applications blocks (one per company and role, however many locations) plus company status `interviewing` or `offer` |
 
 Read the numbers as direction until a group has 30 or more people. Compare by week sent: a fresh batch
 has had less time to reply. Record the channel on every send from day one, or the channel rates have
@@ -118,4 +118,4 @@ nothing to work with.
 ## Person fields the loop adds (all optional, all set by `cc.py mark`)
 
 `channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`,
-`tier`. See `vault.md#ownership`.
+`tier`, `earlier_rounds`. See `vault.md#ownership`.

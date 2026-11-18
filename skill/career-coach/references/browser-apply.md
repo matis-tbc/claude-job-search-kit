@@ -32,7 +32,7 @@ Load the browser tools once, in one ToolSearch call, before starting:
   resume and overwrite fields you already filled (a past employer showing up as "Current company" is
   the common one). Correct each to Standard Answers.
 - **Transcript uploads:** a required transcript means skip the role (check `cc.py questions` before any
-  drafting); an optional one stays blank. Follow the Standard Answers transcript row if it says otherwise.
+  drafting); an optional one stays blank. Upload a transcript only when the user says yes for that form.
 - **Before typing anything, check `document.activeElement`** is the field you mean. A click that missed
   its target leaves focus elsewhere, and the next keystrokes land in the wrong field (a country name
   once ended up in a last-name box).
@@ -134,6 +134,8 @@ function leverFill(map) {
   return Object.entries(map).map(([name, value]) => {
     const el = document.querySelector(`[name="${name}"]`);
     if (!el) return "missing " + name;
+    // checkboxes, radios and hidden inputs (consents, attestations) need a real click, never a script
+    if (["checkbox", "radio", "hidden", "file"].includes(el.type)) return "click required: " + name;
     el.value = value;
     el.dispatchEvent(new Event("input", {bubbles: true}));
     el.dispatchEvent(new Event("change", {bubbles: true}));

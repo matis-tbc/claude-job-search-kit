@@ -19,7 +19,7 @@ sent_on:
 ---
 # Jordan Sample
 
-This is the format `cc.py upsert-person` writes. You never need to copy it by hand: Claude writes person notes through the script, which refuses a person with no source URL and any email address without a public source. Everything inside the `cc:career` markers belongs to the script; `outreach`, `last_contact`, `next_touch` and the Notes section belong to you. The Apply Loop fields (`channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`, `tier`) are written by `cc.py mark` when you say what happened.
+This is the format `cc.py upsert-person` writes. You never need to copy it by hand: Claude writes person notes through the script, which refuses a person with no source URL and any email address without a public source. Everything inside the `cc:career` markers belongs to the script; `outreach`, `last_contact`, `next_touch` and the Notes section belong to you. The Apply Loop fields (`channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`, `tier`, `earlier_rounds`) are written by `cc.py mark` when you say what happened.
 
 ## Career outreach
 <!-- cc:career -->
