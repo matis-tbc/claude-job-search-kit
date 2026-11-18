@@ -260,7 +260,7 @@ CADENCE = {
 CHANNELS = ["note", "inmail", "open-profile", "email", "text", "intro"]
 REPLY_VIA = ["linkedin", "email", "text", "phone"]
 LOOP_KEYS = ["channel", "sent_on", "accepted_on", "email_drafted", "email_on", "replied_on", "replied_via",
-             "proof", "tier"]
+             "proof", "tier", "earlier_rounds"]
 
 
 def cadence_date(event, day):
@@ -276,14 +276,18 @@ def die(msg, code=2):
     sys.exit(code)
 
 
-def vault_root(args):
+def vault_root(args, create=False):
     root = getattr(args, "vault", None) or os.environ.get("CAREER_VAULT") or (CFG or {}).get("paths", {}).get("vault")
     if not root:
         die("no vault set. Fix: set [paths] vault in the config (an Obsidian vault or any plain folder), "
             "or pass --vault.")
     root = os.path.expanduser(root)
+    if create and not os.path.exists(root):
+        os.makedirs(root)
+        print(f"created the vault folder {root}")
     if not os.path.isdir(root):
-        die(f"vault not found at {root}. Fix: create the folder, or correct [paths] vault in {config_path()}.")
+        die(f"vault not found at {root}. Fix: run `cc.py setup` to create it, or correct [paths] vault in "
+            f"{config_path()}.")
     return root
 
 
@@ -516,7 +520,7 @@ NUM_RE = re.compile(r"(€|\$)?(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s?(k|K|m|M|B|%
 
 
 def number_keys(text):
-    """Return (display, key) for each number. key normalizes $225K -> 225000, 3rd -> 3, 4x -> 4x, 20% -> 20%."""
+    """Return (display, key) for each number. key normalizes $180K -> 180000, 4th -> 4, 4x -> 4x, 20% -> 20%."""
     out = []
     for m in NUM_RE.finditer(text or ""):
         cur, num, suf = m.group(1), m.group(2), m.group(3) or ""
@@ -1057,29 +1061,32 @@ def cmd_sweep(args):
 
 def transcript_flag(form_text):
     """A one-line warning when a form asks for a transcript: required means skip the role, optional means leave
-    it blank. Lever labels carry no required marker, so a Lever transcript question reads as required."""
-    lines = [l for l in form_text.splitlines() if re.search(r"transcript", l, re.I)]
+    it blank. Reads question lines only ("- ..."), so a job title or an answer option never trips it."""
+    lines = [l.split("  (options:")[0] for l in form_text.splitlines() if l.startswith("- ")]
+    lines = [l for l in lines if re.search(r"\btranscripts?\b", l, re.I)]
     if not lines:
         return ""
-    if any("[optional]" not in l for l in lines):
+    if any(not re.search(r"\[optional\]|\(optional\)", l, re.I) for l in lines):
         return "FLAG transcript required: skip this role unless the user says otherwise (references/apply-loop.md)."
     return "FLAG transcript optional: leave the upload blank."
 
 
 def cmd_questions(args):
-    import contextlib
-    import io
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        questions_body(args)
-    out = buf.getvalue()
-    sys.stdout.write(out)
-    flag = transcript_flag(out)
+    lines = questions_lines(args)
+    print("\n".join(lines))
+    flag = transcript_flag("\n".join(lines))
     if flag:
         print(flag)
 
 
-def questions_body(args):
+def questions_lines(args):
+    """The posting's title, URL and one "- [required|optional] label" line per non-standard question."""
+    out = []
+    questions_print(args, out.append)
+    return out
+
+
+def questions_print(args, print):  # `print` collects lines, so the transcript flag can read them
     ats, _, slug = args.ats.partition(":")
     if ats == "greenhouse":
         d = http_json(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs/{args.id}?questions=true")
@@ -1101,10 +1108,11 @@ def questions_body(args):
         labels = re.findall(r'<div class="application-label[^"]*">(.*?)</div>', page, flags=re.S)
         print(f"# https://jobs.lever.co/{slug}/{args.id}/apply\n")
         for l in labels:
-            t = re.sub(r"\s+", " ", strip_html(l)).strip()
+            t = re.sub(r"\s+", " ", strip_html(l)).replace("\u2731", "").strip()
+            req = "required" if re.search(r'class="required"|\u2731', l) else "optional"
             if t and not re.match(r"(resume|full name|email|phone|current company|linkedin url|github url|"
                                   r"portfolio url|other website|twitter url)", t, re.I):
-                print(f"- {t}")
+                print(f"- [{req}] {t}")
     elif ats == "ashby":
         q = ("query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) { "
              "jobPosting(organizationHostedJobsPageName: $organizationHostedJobsPageName, jobPostingId: $jobPostingId) "
@@ -1686,20 +1694,41 @@ def cmd_mark(args):
     """Record what the user did: outreach on a person, status on a company. Only on their say-so."""
     root = vault_root(args)
     day = args.date or TODAY.isoformat()
+    for flag in ("date", "next_touch", "next_date"):
+        v = getattr(args, flag, None)
+        if v and not as_date(v):
+            die(f"--{flag.replace('_', '-')} must be YYYY-MM-DD, got '{v}'.")
+    for flag in ("person", "outreach", "company", "status", "next_action", "proof"):
+        if re.search(r"[\r\n]", getattr(args, flag, None) or ""):
+            die(f"--{flag.replace('_', '-')} must be one line.")
+    person_only = [f for f in ("outreach", "next_touch", "event", "channel", "accepted", "email", "replied_via",
+                               "proof", "tier") if getattr(args, f, None) not in (None, False)]
+    if person_only and not args.person:
+        die(f"--{person_only[0].replace('_', '-')} records something about a person: add --person \"Name\".")
+    if not args.person and not (args.company and args.status):
+        die("nothing to mark. Use --person \"Name\" with --outreach, --email, --accepted ..., "
+            "or --company \"Name\" with --status.")
     if args.person:
         path = find_person_note(root, args.person) or die(f"no person note named {args.person}.")
         text = open(path, encoding="utf-8").read()
         fm_raw, body = split_frontmatter(text)
         fm = parse_frontmatter(fm_raw) if fm_raw is not None else {}
-        if args.channel and args.channel not in CHANNELS:
-            die(f"channel must be one of {CHANNELS}")
-        if args.replied_via and args.replied_via not in REPLY_VIA:
-            die(f"replied-via must be one of {REPLY_VIA}")
-        if fm.get("outreach") == "sent" and not fm.get("sent_on") and as_date(fm.get("last_contact")):
+        if args.outreach and args.outreach not in OUTREACH_STATUSES:
+            die(f"outreach must be one of {OUTREACH_STATUSES}")
+        prev = fm.get("outreach") or "not-contacted"
+        if prev == "sent" and not fm.get("sent_on") and as_date(fm.get("last_contact")):
             fm["sent_on"] = str(fm["last_contact"])  # keep the first-touch date before last_contact moves
+        if args.email == "sent" and not args.outreach and prev in ("not-contacted", "drafted"):
+            args.outreach = "sent"  # the email was the first touch
+            args.channel = args.channel or "email"
+        if args.outreach == "sent" and prev in ("replied", "meeting", "dormant", "closed"):
+            # a new round of outreach: earlier reply and follow-up dates belong to the old round
+            old = ", ".join(f"{k} {fm[k]}" for k in ("sent_on", "replied_on", "email_on") if fm.get(k))
+            for k in ("sent_on", "accepted_on", "email_drafted", "email_on", "replied_on", "replied_via"):
+                fm.pop(k, None)
+            if old:
+                fm["earlier_rounds"] = "; ".join(x for x in (str(fm.get("earlier_rounds") or ""), old) if x)
         if args.outreach:
-            if args.outreach not in OUTREACH_STATUSES:
-                die(f"outreach must be one of {OUTREACH_STATUSES}")
             fm["outreach"] = args.outreach
             if args.outreach in ("sent", "replied", "meeting"):
                 fm["last_contact"] = day
@@ -1714,6 +1743,9 @@ def cmd_mark(args):
             fm["replied_on"] = fm.get("replied_on") or day
         if args.accepted:
             fm["accepted_on"] = day
+        if args.replied_via and fm.get("outreach") in ("sent", "drafted", "not-contacted"):
+            fm["outreach"] = "replied"
+            fm["last_contact"] = day
         if args.proof:
             fm["proof"] = args.proof
         if args.tier is not None:
@@ -1729,6 +1761,8 @@ def cmd_mark(args):
             fm["next_touch"] = cadence_date(args.event or "note-sent", day)
         elif args.email == "sent":
             fm["next_touch"] = cadence_date("email-sent", day)
+        elif args.accepted:
+            fm["next_touch"] = cadence_date("note-accepted", day)
         fm["updated"] = TODAY.isoformat()
         open(path, "w", encoding="utf-8").write(dump_frontmatter(fm, PERSON_ORDER) + body)
         print(f"marked {os.path.relpath(path, root)}: outreach {fm.get('outreach')}, last_contact "
@@ -1930,8 +1964,19 @@ def cmd_due(args):
 # ---------------------------------------------------------------- the apply loop: touch, apply, email, measure
 
 # Opener style: a first-person take ("what I find interesting about X is ...") or a fact hook.
-TAKE_RE = re.compile(r"what I find interesting|\bto me\b|what I like|what draws me|what pulls me|"
-                     r"I keep coming back|the smart part|the interesting", re.I)
+TAKE_RE = re.compile(r"what I find interesting|\bto me,|what I like|what draws me|what pulls me|"
+                     r"I keep coming back|the smart part", re.I)
+LIVE_OUTREACH = ("sent", "replied", "meeting", "dormant", "closed")
+
+
+def is_replied(p):
+    return (p.get("outreach") or "") in ("replied", "meeting") or bool(as_date(p.get("replied_on")))
+
+
+def first_touch_date(p):
+    """When the current round of outreach went out. last_contact counts only while outreach is still `sent`:
+    after a reply or a meeting it holds that later date instead."""
+    return as_date(p.get("sent_on")) or (as_date(p.get("last_contact")) if p.get("outreach") == "sent" else None)
 
 
 def proof_patterns():
@@ -1948,13 +1993,17 @@ def proof_patterns():
 
 
 def sent_text(p):
-    """The draft that most likely went out: the note for a connection request, else the message."""
+    """The draft that most likely went out: the one matching the channel (note, message or email), else the
+    message, else the note. Multi-paragraph drafts are read in full."""
     blk = p.get("_career") or ""
-    note = re.search(r"connection note\*\*[^\n]*\n\n> ([^\n]*)", blk)
-    msg = re.search(r"LinkedIn message\*\*[^\n]*\n\n> ([^\n]*)", blk)
-    if p.get("channel") == "note" and note:
-        return note.group(1)
-    return (msg or note).group(1) if (msg or note) else ""
+
+    def draft(label):
+        m = re.search(r"\*\*" + label + r"\*\*[^\n]*\n\n((?:> ?[^\n]*(?:\n|$))+)", blk)
+        return re.sub(r"^> ?", "", m.group(1), flags=re.M).strip() if m else ""
+
+    note, msg, email = draft("LinkedIn connection note"), draft("LinkedIn message"), draft("Email")
+    first = {"note": note, "email": email}.get(p.get("channel") or "", "")
+    return first or msg or note or email
 
 
 def infer_proof(text):
@@ -1974,7 +2023,7 @@ def loop_rows(comps, people):
     """One row per contacted person (plus drafted people at companies with an application), and one per
     application with no contacted person. Each row carries the next step and the date it is due."""
     by_co = {norm_company(c["_name"]): c for c in comps}
-    live_states = ("sent", "replied", "meeting", "dormant", "closed")
+    live_states = LIVE_OUTREACH
     live_cos = {norm_company(person_company(p)) for p in people if (p.get("outreach") or "") in live_states}
     rows, contacted_cos = [], set()
     for p in people:
@@ -1987,8 +2036,8 @@ def loop_rows(comps, people):
         if not live and not (app and o in ("drafted", "not-contacted")
                              and norm_company(person_company(p)) not in live_cos):
             continue
-        sent = as_date(p.get("sent_on")) or (as_date(p.get("last_contact")) if live else None)
-        replied = o in ("replied", "meeting") or bool(as_date(p.get("replied_on")))
+        sent = first_touch_date(p)
+        replied = is_replied(p)
         email_on = as_date(p.get("email_on"))
         applied = as_date(app["applied"]) if app else None
         step, due, flag = "", None, ""
@@ -2001,6 +2050,9 @@ def loop_rows(comps, people):
         elif email_on:
             step = f"email sent {email_on}: {CADENCE['email-sent'][1]}"
             due = email_on + dt.timedelta(days=CADENCE["email-sent"][0])
+        elif p.get("channel") in ("text", "intro"):
+            step = f"reached by {p['channel']}: follow up the same way, not with a cold email"
+            due = as_date(p.get("next_touch"))
         elif applied and sent:
             due = max(applied, sent) + dt.timedelta(days=CADENCE["applied-email"][0])
             step = f"email naming {app['role']}"
@@ -2019,10 +2071,13 @@ def loop_rows(comps, people):
     for c in comps:
         if norm_company(c["_name"]) in contacted_cos or c.get("status") in ("closed", "parked"):
             continue
+        seen_roles = set()
         for a in c.get("_apps", []):
             d = as_date(a.get("applied"))
-            if not d:
+            role_key = (a.get("role") or "").strip().lower()
+            if not d or role_key in seen_roles:  # one row per role, not per location
                 continue
+            seen_roles.add(role_key)
             who = a.get("referral") or ""
             rows.append({"person": who or "(nobody)", "company": c["_name"], "channel": "referral" if who else "",
                          "sent": None, "accepted": None,
@@ -2067,25 +2122,51 @@ def cmd_metrics(args):
     root = vault_root(args)
     comps, people = load_companies(root), load_people(root)
     since = as_date(args.since) if args.since else None
-    sent = []
+    if args.since and not since:
+        die(f"--since must be YYYY-MM-DD, got '{args.since}'.")
+    sent, undated = [], 0
     for p in people:
-        o = p.get("outreach") or ""
-        d = as_date(p.get("sent_on")) or as_date(p.get("last_contact"))
-        if o not in ("sent", "replied", "meeting", "dormant", "closed") or not d or (since and d < since):
+        if (p.get("outreach") or "") not in LIVE_OUTREACH:
+            continue
+        d = first_touch_date(p)
+        if not d:
+            undated += 1  # contacted before sent_on existed and already past `sent`: no reliable send date
+            if since:
+                continue
+        elif since and d < since:
             continue
         text = sent_text(p)
-        replied = o in ("replied", "meeting") or bool(as_date(p.get("replied_on")))
+        replied = is_replied(p)
         sent.append({"name": p["_name"], "co": norm_company(person_company(p)), "sent": d, "replied": replied,
                      "replied_on": as_date(p.get("replied_on")), "via": p.get("replied_via") or "",
                      "channel": p.get("channel") or "unknown", "accepted": bool(as_date(p.get("accepted_on"))),
                      "email": bool(as_date(p.get("email_on"))), "proof": p.get("proof") or infer_proof(text),
                      "style": infer_style(text), "kind": p.get("kind") or "unknown",
                      "warm": p.get("warm") or "unknown", "tier": str(p.get("tier") or "unset"),
-                     "week": (d - dt.timedelta(days=d.weekday())).isoformat()})
+                     "week": (d - dt.timedelta(days=d.weekday())).isoformat() if d else "undated"})
     n = len(sent)
+    # one application per company and role, however many locations it was filed under
+    apps = {}
+    for c in comps:
+        for a in c.get("_apps", []):
+            d = as_date(a.get("applied"))
+            if d and not (since and d < since):
+                key = (norm_company(c["_name"]), a.get("role", "").strip().lower())
+                apps.setdefault(key, (c, a))
     print(f"# Outreach metrics, {TODAY.isoformat()}{' since ' + since.isoformat() if since else ''}")
+    if not n and not apps:
+        if since:
+            print(f"Nothing logged since {since.isoformat()}"
+                  + (f" ({undated} contacted people have no send date and are left out)." if undated else "."))
+        else:
+            print("Nothing logged yet. Record each send with `cc.py mark --person \"Name\" --outreach sent "
+                  "--channel note` and each application with `cc.py applied`, then run metrics again.")
+        return
     print(f"People contacted: {n}. Replied: {rate(sum(s['replied'] for s in sent), n)}.")
-    days = sorted((s["replied_on"] - s["sent"]).days for s in sent if s["replied_on"])
+    if undated:
+        print(f"{undated} contacted people have no send date (logged before sent_on existed): "
+              + ("left out of this window." if since else "counted, shown as week 'undated'."))
+    days = sorted((s["replied_on"] - s["sent"]).days for s in sent if s["replied_on"] and s["sent"])
     if days:
         print(f"Median days to reply: {days[len(days) // 2]} (n={len(days)}).")
     notes = [s for s in sent if s["channel"] == "note"]
@@ -2104,13 +2185,13 @@ def cmd_metrics(args):
         for g, ss in sorted(groups.items(), key=lambda kv: -len(kv[1])):
             print(f"| {g} | {len(ss)} | {rate(sum(x['replied'] for x in ss), len(ss))} |")
     contacted = {s["co"] for s in sent}
-    apps = [(c, a) for c in comps for a in c.get("_apps", []) if as_date(a.get("applied"))
-            and not (since and as_date(a["applied"]) < since)]
-    screened = lambda c: c.get("status") in ("interviewing", "offer")
-    warm = [(c, a) for c, a in apps if norm_company(c["_name"]) in contacted or a.get("referral")]
-    cold = [(c, a) for c, a in apps if (c, a) not in warm]
-    print(f"\n## Applications\nApplications: {len(apps)}. Reached a screen (company status interviewing or offer): "
-          f"{rate(sum(screened(c) for c, _ in apps), len(apps))}.")
+    apps = list(apps.values())
+    screened = lambda c: c.get("status") in ("interviewing", "offer")  # noqa: E731
+    warm, cold = [], []
+    for c, a in apps:
+        (warm if norm_company(c["_name"]) in contacted or a.get("referral") else cold).append((c, a))
+    print(f"\n## Applications\nApplications: {len(apps)}. Reached a screen (company status interviewing or offer "
+          f"today; a screen that ended in closed is not counted): {rate(sum(screened(c) for c, _ in apps), len(apps))}.")
     print(f"| applied | apps | screen |\n|---|---|---|\n| with a contact or referral | {len(warm)} | "
           f"{rate(sum(screened(c) for c, _ in warm), len(warm))} |\n| cold | {len(cold)} | "
           f"{rate(sum(screened(c) for c, _ in cold), len(cold))} |")
@@ -2208,55 +2289,65 @@ TEMPLATE_TARGETS = {  # template file -> PATHS key it is copied to by `setup` (o
 
 def cmd_doctor(args):
     ok = True
+    lines = []
+
+    def out(line):
+        lines.append(line)
+        print(line)
+
     cfg = CFG
-    print(f"{'ok ' if cfg['_exists'] else 'MISSING'} config: {cfg['_path']}")
+    out(f"{'ok ' if cfg['_exists'] else 'MISSING'} config: {cfg['_path']}")
     name = profile("name")
     if not name or name == "Alex Example":
-        print("todo profile: set [profile] name, school, degrees, graduation and start_date in the config")
+        out("todo profile: set [profile] name, school, degrees, graduation and start_date in the config")
     else:
-        print(f"ok  profile: {name}, {profile('school', '?')}, graduating {profile('graduation', '?')}, "
+        out(f"ok  profile: {name}, {profile('school', '?')}, graduating {profile('graduation', '?')}, "
               f"start {profile('start_date', '?')}")
     root = vault_root(args)
-    print(f"ok  vault: {root}")
+    out(f"ok  vault: {root}")
     for key in ("fact_sheet", "standard_answers", "companies", "people", "data", "runs", "resume_dir"):
         p = vp(root, key)
         exists = os.path.exists(p)
         ok &= exists or key in ("runs", "resume_dir", "standard_answers")
-        print(f"{'ok ' if exists else 'MISSING'} {key}: {PATHS[key]}")
+        out(f"{'ok ' if exists else 'MISSING'} {key}: {PATHS[key]}")
     if os.path.exists(vp(root, "fact_sheet")):
         rows = read_fact_sheet(root)
         usable = sum(r["kind"] == "usable" for r in rows)
-        print(f"{'ok ' if usable else 'todo'} Fact Sheet: {usable} usable facts, {len(rows) - usable} blocked")
+        out(f"{'ok ' if usable else 'todo'} Fact Sheet: {usable} usable facts, {len(rows) - usable} blocked")
     else:
-        print("todo Fact Sheet: run `cc.py setup` to copy the template, then fill it in")
+        out("todo Fact Sheet: run `cc.py setup` to copy the template, then fill it in")
     boards = load_ats_rows(root)
-    print(f"{'ok ' if boards else 'todo'} job boards for sweep: {len(boards)} in {PATHS['data']}/ats.tsv")
+    out(f"{'ok ' if boards else 'todo'} job boards for sweep: {len(boards)} in {PATHS['data']}/ats.tsv")
     c = connections_path(root)
-    print(f"{'ok ' if c else 'todo'} LinkedIn export: {c or 'drop Connections.csv into ' + PATHS['data']}"
+    out(f"{'ok ' if c else 'todo'} LinkedIn export: {c or 'drop Connections.csv into ' + PATHS['data']}"
           + (f" ({len(load_connections(root))} connections)" if c else ""))
     if PRENAMED_GLOB:
         pre = glob.glob(PRENAMED_GLOB)
-        print(f"{'ok ' if pre else 'todo'} pre-named people files: {len(pre)} ({PRENAMED_GLOB})")
+        out(f"{'ok ' if pre else 'todo'} pre-named people files: {len(pre)} ({PRENAMED_GLOB})")
     if HOME_NAME != "home region":
-        print(f"ok  home region: {HOME_NAME}, target share {round(HOME_SHARE * 100)}% of every shortlist")
+        out(f"ok  home region: {HOME_NAME}, target share {round(HOME_SHARE * 100)}% of every shortlist")
     else:
-        print("todo home region: set [search] home_region and home_region_pattern (or set the share to 0)")
-    print(f"ok  LinkedIn note limit: {note_limit()} characters")
+        out("todo home region: set [search] home_region and home_region_pattern (or set the share to 0)")
+    out(f"ok  LinkedIn note limit: {note_limit()} characters")
     for prot in CFG["paths"].get("protected") or []:
-        print(f"ok  protected (never edited): {prot}")
+        out(f"ok  protected (never edited): {prot}")
     if os.path.isdir(vp(root, "companies")):
-        print(f"ok  companies in vault: {len(load_companies(root))}; career contacts: {len(load_people(root))}")
+        out(f"ok  companies in vault: {len(load_companies(root))}; career contacts: {len(load_people(root))}")
     phase, advice = search_phase()
-    print(f"phase: {phase}. {advice}")
+    out(f"phase: {phase}. {advice}")
     if args.net:
         for ats, slug in (("ashby", "hadrian-automation"), ("lever", "palantir"), ("greenhouse", "anthropic")):
             try:
                 n = len(fetch_board(ats, slug))
-                print(f"ok  {ats} API reachable ({n} jobs at {slug})")
+                out(f"ok  {ats} API reachable ({n} jobs at {slug})")
             except Exception as e:
                 ok = False
-                print(f"FAIL {ats} API: {e}")
-    print("All checks passed." if ok else "Some checks need attention (see above).")
+                out(f"FAIL {ats} API: {e}")
+    todo = sum(1 for l in lines if l.startswith("todo"))
+    if not ok:
+        out("Some checks need attention (see the MISSING or FAIL lines above).")
+    else:
+        out("Required checks passed." + (f" {todo} todo items above are optional or still to fill in." if todo else ""))
 
 
 def cmd_init(args):
@@ -2278,10 +2369,10 @@ def cmd_init(args):
 
 
 def cmd_setup(args):
-    """Create the folder layout in the vault and copy templates and the seed job boards. Never overwrites."""
-    root = vault_root(args)
+    """Create the vault (if missing), its folder layout, the templates and the seed job boards. Never overwrites."""
+    root = vault_root(args, create=True)
     made = []
-    for key in ("companies", "runs", "data", "people"):
+    for key in ("companies", "runs", "data", "people", "resume_dir"):
         p = vp(root, key)
         if not os.path.isdir(p):
             os.makedirs(p)
@@ -2307,7 +2398,8 @@ def cmd_setup(args):
         print("created:\n" + "\n".join(f"- {m}" for m in made))
     else:
         print("everything already exists; nothing written.")
-    print("Next: fill in the Fact Sheet and Standard Answers, then run `cc.py doctor`.")
+    print("Next: fill in the Fact Sheet, Standard Answers and Story Bank, put upload-ready resume PDFs in "
+          f"{PATHS['resume_dir']}/, then run `cc.py doctor`.")
 
 
 def main():
@@ -2361,12 +2453,12 @@ def main():
     s.add_argument("--next-date"); s.add_argument("--date", help="YYYY-MM-DD, default today")
     s.add_argument("--event", choices=list(CADENCE),
                    help="set next_touch from the cadence table (default for --outreach sent: note-sent, 7 days)")
-    s.add_argument("--channel", help="first-touch channel: " + ", ".join(CHANNELS))
+    s.add_argument("--channel", choices=CHANNELS, help="first-touch channel")
     s.add_argument("--accepted", action="store_true", help="the connection request was accepted (accepted_on)")
     s.add_argument("--email", choices=["drafted", "sent"], help="the follow-up email was drafted or sent")
-    s.add_argument("--replied-via", help="where the reply came: " + ", ".join(REPLY_VIA))
+    s.add_argument("--replied-via", choices=REPLY_VIA, help="where the reply came (also sets outreach replied)")
     s.add_argument("--proof", help="proof-point tag used (a [[proofs]] tag in the config; else inferred)")
-    s.add_argument("--tier", type=int, help="send-list tier, 1 to 3")
+    s.add_argument("--tier", type=int, choices=[1, 2, 3], help="send-list tier")
     s.set_defaults(fn=cmd_mark)
     s = sub.add_parser("applied", help="record an application the user submitted (only when they say so)")
     s.add_argument("--company", required=True); s.add_argument("--role", required=True)
@@ -2382,7 +2474,8 @@ def main():
     s.add_argument("--days", type=int, default=0); s.add_argument("--applied-only", action="store_true")
     s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_loop)
     s = sub.add_parser("metrics", help="reply, accept and screen rates by channel, proof, style, tier")
-    s.add_argument("--since", help="YYYY-MM-DD: only outreach and applications on or after"); s.set_defaults(fn=cmd_metrics)
+    s.add_argument("--since", help="YYYY-MM-DD: only outreach and applications on or after")
+    s.set_defaults(fn=cmd_metrics)
     s = sub.add_parser("lint"); s.set_defaults(fn=cmd_lint)
     s = sub.add_parser("import-tracker", help="read Application Tracker.md; --dry-run prints the applied calls")
     s.add_argument("--dry-run", action="store_true"); s.add_argument("--file", help="tracker path (default: vault)")

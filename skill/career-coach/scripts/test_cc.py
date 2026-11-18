@@ -25,19 +25,19 @@ created: 2026-10-10
 
 | Fact | Value to use | Status | Source / note |
 |---|---|---|---|
-| Team size | 50 | **conflict** | Resume says 50; LinkedIn says 40 |
-| Competition result 2026 | 3rd in the nation, Mar 2026 | verified | results page |
-| Record annual budget | $225K (2025-26 season) | verified as budget | say grew the budget to |
-| Budget before the user led sponsorships | $53K or $79K | **conflict** | "4x" holds only from $53K |
-| Corporate sponsors | 54 | verified | sponsor tracker |
-| Sponsored share of build cost | 80%+ | estimate | the user's guess |
+| Team size | 60 | **conflict** | Resume says 60; LinkedIn says 48 |
+| Competition result 2026 | 4th in the nation, Mar 2026 | verified | results page |
+| Record annual budget | $180K (2025-26 season) | verified as budget | say grew the budget to |
+| Budget before the user led sponsorships | $45K or $70K | **conflict** | "4x" holds only from $45K |
+| Corporate sponsors | 31 | verified | sponsor tracker |
+| Sponsored share of build cost | 70%+ | estimate | the user's guess |
 
 ## Example Corp internship
 
 | Fact | Value to use | Status | Source / note |
 |---|---|---|---|
-| Phishing simulation | site + 50 USB keys | verified (offer letter) | |
-| Savings | estimated $150K per year | self-reported, not independently verified | |
+| Phishing simulation | site + 60 USB keys | verified (offer letter) | |
+| Savings | estimated $90K per year | self-reported, not independently verified | |
 | Assets tracked | 25,000+ | blocked | retired, same set as another row |
 
 ## Education
@@ -167,7 +167,7 @@ class CCTest(unittest.TestCase):
     # facts and check
     def test_facts_only_usable(self):
         out = self.run_cc("facts").stdout
-        self.assertIn("Corporate sponsors: 54", out)
+        self.assertIn("Corporate sponsors: 31", out)
         self.assertNotIn("Team size", out)
         self.assertNotIn("Savings", out)
         self.assertNotIn("Assets tracked", out)
@@ -175,23 +175,23 @@ class CCTest(unittest.TestCase):
         self.assertIn("[BLOCKED: blocked]", self.run_cc("facts", "--all").stdout)
 
     def test_check_blocks_conflict_number_in_context(self):
-        r = self.run_cc("check", "--kind", "message", stdin="I led a 50-person team at the robotics club.")
+        r = self.run_cc("check", "--kind", "message", stdin="I led a 60-person team at the robotics club.")
         self.assertEqual(r.returncode, 1)
         self.assertIn("Team size", r.stdout)
 
     def test_check_allows_same_number_in_other_context(self):
-        r = self.run_cc("check", stdin="I ran a phishing test with 50 USB keys.")
+        r = self.run_cc("check", stdin="I ran a phishing test with 60 USB keys.")
         self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_check_blocks_note_only_numbers_and_estimates(self):
-        for text in ("We grew the budget 4x.", "Sponsors covered 80%+ of the build.", "Led a team of 40 engineers.",
+        for text in ("We grew the budget 4x.", "Sponsors covered 70%+ of the build.", "Led a team of 48 engineers.",
                      "Tracked 25,000+ assets."):
             r = self.run_cc("check", stdin=text)
             self.assertEqual(r.returncode, 1, text + r.stdout)
 
     def test_check_verified_numbers_pass(self):
-        r = self.run_cc("check", stdin="We placed 3rd in the nation, closed 54 sponsors and grew the budget to "
-                                       "$225K. Would you have 10 minutes for a quick call in 2026?")
+        r = self.run_cc("check", stdin="We placed 4th in the nation, closed 31 sponsors and grew the budget to "
+                                       "$180K. Would you have 10 minutes for a quick call in 2026?")
         self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_check_em_dash_and_length(self):
@@ -221,9 +221,9 @@ class CCTest(unittest.TestCase):
         r = self.run_cc("check", "--strict", "--kind", "answer", stdin="I served 35+ clients.")
         self.assertEqual(r.returncode, 1)
         self.assertIn("ERROR", r.stdout)
-        r = self.run_cc("check", "--strict", "--kind", "answer", stdin="I closed 54 sponsors over 2 years.")
+        r = self.run_cc("check", "--strict", "--kind", "answer", stdin="I closed 31 sponsors over 2 years.")
         self.assertEqual(r.returncode, 1)  # 2 is not on the Fact Sheet either
-        r = self.run_cc("check", "--strict", "--kind", "answer", stdin="I closed 54 sponsors in 2026.")
+        r = self.run_cc("check", "--strict", "--kind", "answer", stdin="I closed 31 sponsors in 2026.")
         self.assertEqual(r.returncode, 0, r.stdout)
 
     # companies
@@ -283,7 +283,7 @@ class CCTest(unittest.TestCase):
     def test_person_opener_checked(self):
         r = self.run_cc("upsert-person", self.write_json("p.json", {
             "name": "A B", "company": "Acme", "source": "https://x.com",
-            "opener": {"note": "Hi A, I led a 50-person team. Chat?"}}))
+            "opener": {"note": "Hi A, I led a 60-person team. Chat?"}}))
         self.assertEqual(r.returncode, 2)
         self.assertIn("Team size", r.stderr)
 
@@ -291,7 +291,7 @@ class CCTest(unittest.TestCase):
         r = self.run_cc("upsert-person", self.write_json("p.json", {
             "name": "Pat Lee", "company": "Acme Robotics", "source": "https://linkedin.com/in/pat",
             "kind": "founder", "warm": "cold",
-            "opener": {"note": "Hi Pat, congrats on the Series A. I closed 54 sponsors for our club. "
+            "opener": {"note": "Hi Pat, congrats on the Series A. I closed 31 sponsors for our club. "
                                "Would you have 10 minutes for a quick call?", "allow": ["10"]}}))
         self.assertEqual(r.returncode, 0, r.stderr)
         text = open(self.ppath()).read()
@@ -451,7 +451,7 @@ class CCTest(unittest.TestCase):
         self.run_cc("mark", "--person", "Pat Lee", "--outreach", "sent", "--channel", "note", "--date", "2026-11-10")
         self.run_cc("mark", "--person", "Pat Lee", "--accepted", "--date", "2026-11-11")
         text = open(pp).read()
-        for want in ("channel: note", "sent_on: 2026-11-10", "accepted_on: 2026-11-11", "next_touch: 2026-11-17"):
+        for want in ("channel: note", "sent_on: 2026-11-10", "accepted_on: 2026-11-11", "next_touch: 2026-11-12"):
             self.assertIn(want, text)
         self.run_cc("mark", "--person", "Pat Lee", "--email", "sent", "--date", "2026-11-14")
         text = open(pp).read()
@@ -460,9 +460,9 @@ class CCTest(unittest.TestCase):
         self.assertIn("next_touch: 2026-11-21", text)
         self.assertIn("sent_on: 2026-11-10", text)
         self.run_cc("mark", "--person", "Pat Lee", "--outreach", "replied", "--replied-via", "email",
-                    "--proof", "sponsors-54", "--tier", "1", "--date", "2026-11-15")
+                    "--proof", "sponsors-31", "--tier", "1", "--date", "2026-11-15")
         text = open(pp).read()
-        for want in ("replied_on: 2026-11-15", "replied_via: email", "proof: sponsors-54", "tier: 1"):
+        for want in ("replied_on: 2026-11-15", "replied_via: email", "proof: sponsors-31", "tier: 1"):
             self.assertIn(want, text)
         r = self.run_cc("mark", "--person", "Pat Lee", "--channel", "pigeon")
         self.assertEqual(r.returncode, 2)
@@ -517,19 +517,20 @@ class CCTest(unittest.TestCase):
         self.assertIn("| note | 1 | 0/1 (0%) |", out)
         self.assertIn("| with a contact or referral | 1 | 0/1 (0%) |", out)
         self.assertIn("Small sample", out)
-        self.assertIn("People contacted: 0.", self.run_cc("metrics", "--since", "2026-11-11", today="2026-11-14").stdout)
+        out = self.run_cc("metrics", "--since", "2026-11-11", today="2026-11-14").stdout
+        self.assertIn("People contacted: 0.", out)  # the application on 11-11 is still in the window
 
     def test_infer_proof_from_config_and_style(self):
         cc = load_cc()
         cfg = cc.load_config(type("A", (), {"config": self.cfg})())
-        cfg["proofs"] = [{"tag": "result-3rd", "pattern": r"3rd in the"},
-                         {"tag": "sponsors-54", "pattern": r"\b54 (corporate )?sponsors"}]
+        cfg["proofs"] = [{"tag": "result-4th", "pattern": r"4th in the"},
+                         {"tag": "sponsors-31", "pattern": r"\b31 (corporate )?sponsors"}]
         cc.configure(cfg)
-        self.assertEqual(cc.infer_proof("I closed 54 sponsors for our club."), "sponsors-54")
-        self.assertEqual(cc.infer_proof("We placed 3rd in the nation."), "result-3rd")
+        self.assertEqual(cc.infer_proof("I closed 31 sponsors for our club."), "sponsors-31")
+        self.assertEqual(cc.infer_proof("We placed 4th in the nation."), "result-4th")
         self.assertEqual(cc.infer_proof("No proof here."), "none")
         cfg["proofs"] = []
-        self.assertEqual(cc.infer_proof("I closed 54 sponsors."), "none")
+        self.assertEqual(cc.infer_proof("I closed 31 sponsors."), "none")
         self.assertEqual(cc.infer_style("Hi Jo, what I find interesting about X is Y."), "my-take")
         self.assertEqual(cc.infer_style("Hi Jo, congrats on the round."), "fact-hook")
 
@@ -541,6 +542,124 @@ class CCTest(unittest.TestCase):
         r = self.run_cc("lint")
         self.assertEqual(r.returncode, 1)
         self.assertIn("channel 'pigeon'", r.stdout)
+
+    def test_setup_creates_missing_vault_and_resume_dir(self):
+        cfg = os.path.join(self.tmp.name, "new.toml")
+        fresh = os.path.join(self.tmp.name, "not yet made")
+        self.assertEqual(self.run_cc("init", "--vault-path", fresh, config=cfg).returncode, 0)
+        r = self.run_cc("setup", config=cfg)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isdir(os.path.join(fresh, "Career/Resume/Ready to Send")))
+        out = self.run_cc("doctor", config=cfg).stdout
+        self.assertNotIn("MISSING", out)
+        self.assertIn("Required checks passed.", out)
+        self.assertIn("todo items above", out)
+
+    def test_mark_validates_flags(self):
+        self.company()
+        self.person()
+        before = open(self.ppath()).read()
+        for args in (("--tier", "0"), ("--replied-via", "fax"), ("--date", "11/14/2026", "--outreach", "sent"),
+                     ("--proof", "x\noutreach: replied")):
+            r = self.run_cc("mark", "--person", "Pat Lee", *args)
+            self.assertEqual(r.returncode, 2, args)
+        r = self.run_cc("mark", "--company", "Acme Robotics", "--tier", "2")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--person", r.stderr)
+        self.assertEqual(self.run_cc("mark", "--company", "Acme Robotics").returncode, 2)
+        self.assertEqual(open(self.ppath()).read(), before)
+
+    def test_mark_email_first_touch_and_reply_via(self):
+        self.company()
+        self.person()
+        self.run_cc("mark", "--person", "Pat Lee", "--email", "sent", "--date", "2026-11-10")
+        text = open(self.ppath()).read()
+        for want in ("outreach: sent", "channel: email", "sent_on: 2026-11-10", "email_on: 2026-11-10"):
+            self.assertIn(want, text)
+        self.run_cc("applied", "--company", "Acme Robotics", "--role", "BizOps Associate", "--date", "2026-11-09")
+        out = self.run_cc("loop", today="2026-11-12").stdout
+        self.assertNotIn("NOTE FIRST", out)
+        self.assertIn("email sent 2026-11-10", out)
+        self.run_cc("mark", "--person", "Pat Lee", "--replied-via", "email", "--date", "2026-11-12")
+        text = open(self.ppath()).read()
+        self.assertIn("outreach: replied", text)
+        self.assertIn("replied_on: 2026-11-12", text)
+
+    def test_mark_new_round_clears_old_reply(self):
+        self.company()
+        self.person()
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "sent", "--channel", "note", "--date", "2026-10-01")
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "replied", "--date", "2026-10-03")
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "dormant", "--date", "2026-10-20")
+        self.run_cc("mark", "--person", "Pat Lee", "--outreach", "sent", "--date", "2026-11-10")
+        text = open(self.ppath()).read()
+        self.assertIn("sent_on: 2026-11-10", text)
+        self.assertNotIn("\nreplied_on", text)
+        self.assertIn("earlier_rounds: \"sent_on 2026-10-01, replied_on 2026-10-03\"", text)
+        self.run_cc("applied", "--company", "Acme Robotics", "--role", "BizOps Associate", "--date", "2026-11-11")
+        self.assertIn("1 emails due", self.run_cc("loop", today="2026-11-14").stdout)
+        self.assertIn("Replied: 0/1 (0%)", self.run_cc("metrics", today="2026-11-14").stdout)
+
+    def test_loop_people_and_application_edges(self):
+        self.company(people=["Pat Lee", "Sam Kim"])
+        self.person()
+        self.person("Sam Kim")
+        self.assertIn("0 rows", self.run_cc("loop", today="2026-11-14").stdout)  # drafted, no application
+        self.run_cc("mark", "--person", "Sam Kim", "--outreach", "sent", "--date", "2026-11-10")
+        for role, day in (("Ops A1", "2026-11-01"), ("Ops A2", "2026-11-09")):
+            self.run_cc("applied", "--company", "Acme Robotics", "--role", role, "--date", day)
+        rows = json.loads(self.run_cc("loop", "--json", today="2026-11-14").stdout)
+        self.assertEqual([r["person"] for r in rows], ["Sam Kim"])  # Pat is drafted but Sam is live
+        self.assertIn("Ops A2", rows[0]["applied"])
+        self.run_cc("applied", "--company", "Nova Space", "--role", "Analyst", "--referral", "Jo Ref",
+                    "--url", "https://n.example/1", "--also-url", "https://n.example/2", "--date", "2026-11-11")
+        rows = json.loads(self.run_cc("loop", "--json", today="2026-11-14").stdout)
+        nova = [r for r in rows if r["company"] == "Nova Space"]
+        self.assertEqual([(r["person"], r["flag"], r["due"]) for r in nova], [("Jo Ref", "", None)])
+        self.assertIn("Applications: 3.", self.run_cc("metrics", today="2026-11-14").stdout)
+        self.run_cc("mark", "--company", "Nova Space", "--status", "parked")
+        rows = json.loads(self.run_cc("loop", "--json", today="2026-11-14").stdout)
+        self.assertFalse([r for r in rows if r["company"] == "Nova Space"])
+
+    def test_metrics_empty_bad_since_and_undated(self):
+        out = self.run_cc("metrics", today="2026-11-14").stdout
+        self.assertIn("Nothing logged yet", out)
+        self.assertEqual(json.loads(self.run_cc("loop", "--json", today="2026-11-14").stdout), [])
+        r = self.run_cc("metrics", "--since", "11/10/2026")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("YYYY-MM-DD", r.stderr)
+        self.company()
+        self.person()
+        pp = self.ppath()  # a note logged before sent_on existed, already at replied
+        text = re.sub(r"^outreach: .*$", "outreach: replied\nlast_contact: 2026-11-12", open(pp).read(), count=1,
+                      flags=re.M)
+        open(pp, "w").write(text)
+        out = self.run_cc("metrics", today="2026-11-14").stdout
+        self.assertIn("People contacted: 1. Replied: 1/1 (100%).", out)
+        self.assertIn("1 contacted people have no send date", out)
+        self.assertNotIn("Median days", out)
+        out = self.run_cc("metrics", "--since", "2026-11-01", today="2026-11-14").stdout
+        self.assertIn("Nothing logged since 2026-11-01 (1 contacted people have no send date", out)
+
+    def test_sent_text_follows_channel_and_reads_full_draft(self):
+        cc = load_cc()
+        blk = ("**LinkedIn connection note** (90 chars):\n\n> What I find interesting is A.\n> Second line?\n\n"
+               "**LinkedIn message** (9 words):\n\n> Congrats on B?\n\n**Email** (5 words):\n\n> Email text?")
+        self.assertEqual(cc.sent_text({"channel": "note", "_career": blk}), "What I find interesting is A.\nSecond line?")
+        self.assertEqual(cc.sent_text({"channel": "inmail", "_career": blk}), "Congrats on B?")
+        self.assertEqual(cc.sent_text({"channel": "email", "_career": blk}), "Email text?")
+        self.assertEqual(cc.sent_text({"_career": ""}), "")
+        self.assertEqual(cc.infer_style("Feel free to reach out to me anytime."), "fact-hook")
+
+    def test_questions_prints_transcript_flag(self):
+        cc = load_cc()
+        cc.questions_print = lambda a, emit: [emit("# Analyst"), emit("- [required] Unofficial transcript")]
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cc.cmd_questions(None)
+        self.assertIn("- [required] Unofficial transcript\nFLAG transcript required", buf.getvalue())
 
     def test_lint_flags_bad_enums(self):
         self.company()
@@ -649,7 +768,10 @@ class SweepFilters(unittest.TestCase):
         self.assertEqual(cc.transcript_flag("- [required] Why us?\n- [optional] Portfolio"), "")
         self.assertIn("required: skip", cc.transcript_flag("- [required] Unofficial transcript"))
         self.assertIn("optional", cc.transcript_flag("- [optional] Transcript (PDF)"))
-        self.assertIn("required", cc.transcript_flag("- Upload your transcript"))  # Lever: no marker
+        self.assertIn("required", cc.transcript_flag("- Upload your transcript"))  # no marker reads as required
+        self.assertEqual(cc.transcript_flag("# Speech Transcription Lead\n- [required] Why us?"), "")
+        self.assertEqual(cc.transcript_flag("- [required] Tools  (options: Otter transcripts, Notion)"), "")
+        self.assertIn("optional", cc.transcript_flag("- Unofficial transcript (optional)"))
 
     def test_seed_boards_are_well_formed(self):
         seed = os.path.join(os.path.dirname(HERE), "data", "ats.tsv")

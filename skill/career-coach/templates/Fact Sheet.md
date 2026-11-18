@@ -18,7 +18,7 @@ Status key:
 
 Rules that keep the checker honest:
 - Keep the Status cell to the status word only (notes go in the last column), or the row reads as blocked.
-- Put the exact printable wording in "Value to use", including units ("$225K", "54", "3rd").
+- Put the exact printable wording in "Value to use", including units ("$180K", "31", "4th").
 - When you retire a number, keep the row with status `blocked` so old phrasings still get caught.
 
 ## Example Club (replace with a real club, team or project)
