@@ -41,9 +41,9 @@ Keep wording no stronger than the row ("grew the budget to", not "raised").
 
 | Kind | Limit | When |
 |---|---|---|
-| `note` (LinkedIn connection note) | the config's note limit: 200 characters free, 300 Premium | Write it so it works alone |
+| `note` (LinkedIn connection note) | the config's note limit: 200 characters free, 300 Premium | Aim for the last 50 characters of the limit (250 to 300 with Premium) so the ask is a full sentence. Write it so it works alone |
 | `message` (LinkedIn DM or InMail) | 120 words, aim for 60 to 100 | After they accept, or with InMail |
-| `email` | 160 words | Only if asked and a sourced address exists |
+| `email` | 160 words; follow-up emails under 120 | The day-3 follow-up in `apply-loop.md`, or when asked; only to a sourced address |
 | `answer` (form answers, essays, bullets) | 300 words; always `--strict` | Every application answer |
 
 Always produce `note` and `message`. Run each through
@@ -52,15 +52,21 @@ refuses a failing draft.
 
 ## Examples (fake person, fake companies)
 
-Relationship phase, hiring manager at a hardware startup, cold:
+Every example opens with a first-person take, carries one proof and ends on the full-sentence ask.
 
-> **note** (177 chars): Hi Jane, congrats on the new test site. I led sponsorships for State's robotics club (12 sponsors) and want to work in ops. Would you have 10 minutes for a quick call next week?
+Relationship phase, hiring manager at a hardware startup, cold, Premium note:
 
-> **message**: Hi Jane, congrats on getting the new test site open. I'm a senior at State University studying CS and Economics. I led sponsorships for our robotics club, where we closed 12 corporate sponsors and placed 2nd of 20 teams this spring. I graduate in May and start full time in August 2027. Would you have 10 minutes in the next couple of weeks so I can learn how your operations team hires?
+> **note** (286 chars): Hi Jane, what I find interesting about the second test site is that you're testing in the field before the factory is done, which is the hard way and the fast way. I closed 12 corporate sponsors for State's robotics club. Would you have 10 minutes for a call on how your ops team hires?
+
+> **message**: Hi Jane, what I find interesting about the second test site is that it puts field testing ahead of the factory build, so the ops team has to run two schedules at once. That is the kind of work I want after I finish CS and Economics at State University in May. I led sponsorships for our robotics club and closed 12 corporate sponsors. Would you have 10 minutes for a call on how your operations team hires for August 2027 starts?
 
 Application phase, open req, alum:
 
-> **note**: Hey Sam, fellow State grad here. I just applied for the Business Operations Associate role on your team. I ran sponsorships for our robotics club for 2+ years. Would you have 10 minutes for a quick call this week?
+> **note**: Hey Sam, fellow State grad here. I applied for the Business Operations Associate role. To me the best part of it is owning planning across two sites in year one. I ran sponsorships for our robotics club for 2+ years. Would you have 10 minutes for a call on what the role owns first?
+
+Day-3 follow-up email after applying (template and timing in `apply-loop.md`):
+
+> Hi Sam, I applied for the Business Operations Associate role and sent you a note on LinkedIn, so I'm following up here. What I find interesting about the new Springfield line is that it doubles output without a second shift, which makes planning the bottleneck. I closed 12 corporate sponsors for our robotics club. I finish at State University in May. My resume is attached. Would you have 10 minutes for a call on what the role owns first?
 
 Intro ask to a connector, batched:
 

@@ -8,11 +8,23 @@ there is one. Fewer good names beat more weak ones.
 1. **Warm and relevant.** Anyone with a real tie to the user who sits on or near the team: a LinkedIn
    1st-degree connection, a coworker or club member (the labeled folders in `[warm.people_dirs]`), an
    alum from `[warm] alumni`, a contact at an organization the user already works with.
-2. **The hiring manager.** The person the open role reports to. Read the posting for the team name
-   ("reports to the Head of Business Operations"), then find who holds that title.
-3. **A founder**, when the company is under about 100 people. At a Series A, the CEO or COO often *is*
-   the hiring manager for ops, BD and special projects.
+2. **The manager who owns the team.** The person the open role reports to, or the manager-level owner
+   of the team the user would join (BD or partnerships manager, head of business operations, chief of
+   staff). Read the posting for the team name ("reports to the Head of Business Operations"), then find
+   who holds that title. Someone already doing the job is a good second name: ask them what the work is
+   like, not for a job.
+3. **A founder**, only when the company is under about 50 people. At a small Series A, the CEO or COO
+   often *is* the hiring manager for ops, BD and special projects. VPs and C-suite at bigger companies
+   only through an intro.
 4. **A recruiter**, last, and only the one who owns that team or early-career hiring.
+
+At most 2 people per company per batch, each with a draft written for them. Never the same text to two
+people. Before staging, confirm the person still holds the title: people move.
+
+**Friends are not leads.** Anyone the user knows personally gets a text in the user's own words, not a
+LinkedIn draft. A 1st-degree connection is usually an acquaintance, so ask which ones are friends before
+drafting, and list friends in a separate "text, not LinkedIn" section of any send list. At a company
+where a friend works, hold cold notes until the friend answers.
 
 Warm beats senior. An alum two levels below the VP who will forward the note is worth more than the
 VP who will not read it. When the strongest path is an introduction, the target person gets

@@ -10,8 +10,9 @@ description: |
   tracks applications and follow-ups in an Obsidian vault or plain folder.
   Use this whenever the user asks to find jobs, roles, startups or companies to apply to, who to reach
   out to or network with, draft a LinkedIn note, cold message or intro ask, prep or fill an application
-  form, log an application, check their pipeline or what is due, "career scan", "sweep", "who's hiring",
-  "find me companies like X", or anything about their job search, even if they do not say "career coach".
+  form, log an application, check their pipeline or what is due, run the apply loop, follow up on
+  applications, check what is working ("metrics"), "career scan", "sweep", "who's hiring", "find me
+  companies like X", or anything about their job search, even if they do not say "career coach".
   Never sends or submits anything and never spends paid credits.
 allowed-tools:
   - Read
@@ -56,7 +57,16 @@ These exist because breaking any one of them costs the user something they canno
   `last_contact`, `next_touch` and the `## Notes` section belong to the user.
 - **Never edit the folders listed in `[paths] protected`**, never move or rename vault files, never
   change the user's tag system.
-- **Logging happens only on the user's say-so**, never because a form looked filled.
+- **Logging happens only on the user's say-so or a confirmation email**, never because a form looked
+  filled. With an email connector, check the inbox for the ATS confirmation instead of asking.
+
+## Do the work yourself
+
+The user's time goes to Submit, Send and decisions. Everything else is Claude's: find the profiles,
+write the notes, essays and cover letters, fill the forms, attach the files, draft the emails, check the
+inbox for confirmations and replies, log it all. Report what is done and what waits on a click, not a
+list of tasks. Ask only for what the rules above reserve for the user (submit, send, accounts,
+passwords, money, attestations) or a fact that is not in the vault.
 
 ## Setup (every session, 10 seconds)
 
@@ -88,12 +98,15 @@ If WebSearch is a deferred tool in this session, load it first with ToolSearch (
    overwrites). Ask the user for each `[profile]` and `[search]` value and edit the file with them.
    Do not invent values; leave a field empty rather than guess.
 2. `cc.py setup` creates the folders, copies the templates (Fact Sheet, Standard Answers, Application
-   Tracker, Next Session, Connectors, and reference copies of the Company, Person and Form Prep notes)
-   and seeds `Data/ats.tsv` with public job boards. It never overwrites a file.
+   Tracker, Next Session, Connectors, Story Bank, and reference copies of the Company, Person, Form
+   Prep and Apply Loop Batch notes plus the cover-letter `.tex`) and seeds `Data/ats.tsv` with public
+   job boards. It never overwrites a file.
 3. Fill the Fact Sheet with the user, row by row, from their resume. Every row starts `unconfirmed`
    until they confirm it; only then mark it `verified` (with a source) or `decided`. Ask only about
    facts that go on paper or come up in interviews.
-4. Fill Standard Answers with them. Then `cc.py doctor` until it is clean, and run a first **sweep**.
+4. Fill Standard Answers with them, then the Story Bank (5 STAR stories with a lesson line each), and
+   add one `[[proofs]]` tag per proof point to the config so `metrics` can group by it.
+   Then `cc.py doctor` until it is clean, and run a first **sweep**.
 
 ## Who the user is (for ranking and voice)
 
@@ -126,12 +139,13 @@ most one company whose only signal is a job posting for every 4 on the list.
 | "who should I reach out to at X" | **people** | Steps 5 to 6 for X |
 | "draft openers for X / for Jane" | **openers** | Step 7 |
 | "do the whole thing", "full run" | **full** | Steps 1 to 8 for the top 5 by fit |
-| "prep the form for X", "form prep" | **form prep** | `cc.py questions`, answers from Standard Answers, essay skeletons, a Form Prep note from the template |
-| "apply: <url>", "fill the form" | **apply** | Form prep, then fill in Claude in Chrome per `references/browser-apply.md`; stop before Submit |
+| "prep the form for X", "form prep" | **form prep** | `cc.py questions` (a transcript FLAG means skip), answers from Standard Answers, essays in full from the Story Bank, a Form Prep note from the template |
+| "apply: <url>", "fill the form" | **apply** | Form prep, essays written in full from the Story Bank, a cover letter per `references/cover-letter.md`, then fill in Claude in Chrome per `references/browser-apply.md` (up to five tabs); stop before Submit |
+| "apply loop", "who gets an email", "follow up on applications", "what's working", "metrics" | **apply loop** | `references/apply-loop.md`: `cc.py loop --due --days 3` for the next steps (EMAIL DUE, NOTE FIRST, APPLIED COLD), touch, apply, draft the day-3 emails, log with `mark --channel`, `--accepted`, `--email drafted|sent`, `--replied-via`; `cc.py metrics` for reply, accept and screen rates |
 | "stage the notes", "stage Jane" | **stage** | LinkedIn staging per `references/browser-apply.md`; stop before Send |
 | "where am I" | **status** | `cc.py status`, then advise the 3 next moves |
 | "what's due", "what do I follow up on" | **due** | `cc.py due` (`--days 7` for the week), then the 3 next moves |
-| "I applied to X", "submitted", "sent Jane" | **log** | `cc.py applied` per role, `cc.py mark` per person (see Logging) |
+| "I applied to X", "submitted", "sent Jane" | **log** | confirm in the inbox if connected, then `cc.py applied` per role, `cc.py mark --channel ...` per person (see Logging) |
 | pastes a posting URL or text | **posting** | Steps 3 and 4 for that role, then 5 to 7 |
 | "refresh X" or a company note is stale | **refresh** | Steps 2 to 4 for known companies, signals and roles only |
 
@@ -176,18 +190,22 @@ people folders from `[warm.people_dirs]`, org contact notes, Target Companies an
 search for alumni from `[warm] alumni` at the company (`references/people.md`).
 
 ### 6. Name 2 or 3 people
-Priority: the hiring manager for the role; at a company under about 100 people, a founder; then an
-alum on that team; a recruiter last. Warm beats senior. When the best path is an intro, the person
+Priority: warm paths; the manager who owns the team the user would join; at a company under about 50
+people, a founder (executives elsewhere only through an intro); then an alum on that team; a recruiter
+last. At most 2 contacted per company per batch, never the same text. Friends get a text in the
+user's words, not a LinkedIn draft (`references/people.md`). Warm beats senior. When the best path is an intro, the person
 record gets `via: <connector>`. Write each with `cc.py upsert-person <file.json>`; it refuses a row
 without a source.
 
 ### 7. Draft openers and answers
-Follow `references/openers.md` and `references/writing-rules.md`: one dated hook from the company, one
-proof point from `cc.py facts`, one concrete ask that fits the phase. Write a connection note (the
+Follow `references/openers.md` and `references/writing-rules.md`: a first-person take on one dated,
+real thing the company did (not a list of facts), one proof point from `cc.py facts`, and one closing
+ask that fits the phase ("Would you have 10 minutes for a call on X?"). Write a connection note (the
 config's note limit) and a message (120 words max), plus an email only if asked and a sourced address
 exists. Run every draft through `cc.py check --kind note|message --allow '<company number>'`; form
 answers and essays through `cc.py check --strict --kind answer`. The upsert runs the same check.
-Essays and "why us" answers: a skeleton with short bracketed slots for the user's own words.
+Essays and "why us" answers: written in full from the Story Bank, a different story per question,
+each ending with a lesson tied to the company. No brackets left. The user reads them before Submit.
 
 ### 8. Log and report
 Write a run log with `cc.py log-run --mode <mode> --body-file <md>`: queries, companies kept and dropped
@@ -202,18 +220,27 @@ Keep the chat report short. The detail lives in the notes.
 
 ### Filling forms and staging notes (Claude in Chrome)
 Only when the user asks and the extension is connected. Follow `references/browser-apply.md` exactly:
-fill from Standard Answers and the Form Prep note only, read every field back, stop at Submit, Send,
-logins, CAPTCHAs and attestations, keep at most 3 to 5 tabs open, and never navigate a tab the user
-handed over for a specific purpose.
+fill from Standard Answers, the Story Bank and the Form Prep note only, never press Enter in a field,
+re-read every field after a resume upload, leave optional fields blank unless true today, decline EEO by
+default, read every field back, stop at Submit, Send, logins, CAPTCHAs and attestations, keep at most 5
+tabs open (five applications at once is the normal batch), and never navigate a tab the user handed
+over for a specific purpose.
 
 ### Logging applications and follow-ups
-Only on the user's say-so. For each role submitted: `cc.py applied --company X --role "Title" --resume
+The full cycle (touch, apply, email 3 days later, measure) is `references/apply-loop.md`; read it before
+any follow-up batch. Record the first-touch channel on every send: `mark --person X --outreach sent
+--channel note|inmail|open-profile|email|text|intro`. Later: `--accepted`, `--email drafted|sent`,
+`--replied-via linkedin|email|text|phone`, `--proof <tag>`, `--tier 1|2|3`.
+Only on the user's say-so (or an ATS confirmation in their inbox). For each role submitted: `cc.py applied --company X --role "Title" --resume
 <exact PDF filename> [--url URL] [--also-url URL2] [--referral NAME] [--date YYYY-MM-DD]`. It adds a row
 to the company note's Applications block, moves `status` to `applied` (never backward), sets the
 10-day follow-up and creates a stub company note if none exists. Rerunning is safe. Follow-up dates
 come from one cadence table in `cc.py` (`CADENCE`): referral asked 3 days, applied with no named human
-3, note not accepted 7, application 10, withdraw a pending request 14, second touch 24. `mark --person
-X --outreach sent` sets `next_touch`; `--event <name>` picks another row. `cc.py import-tracker
+3, note not accepted 7, application 10, withdraw a pending request 14, second touch 24, follow-up email 3 days after the later
+of the touch and the application (`applied-email`), second contact 7 days after that email
+(`email-sent`). `mark --person X --outreach sent` sets `next_touch`; `--event <name>` picks another row;
+`--email sent` sets it 7 days out. `cc.py loop` shows per person where each role stands; `cc.py due`
+includes its EMAIL DUE and NOTE FIRST rows. `cc.py import-tracker
 --dry-run` prints the `applied` calls the Application Tracker implies; run them only after a yes.
 
 ## When things go wrong
@@ -232,6 +259,9 @@ X --outreach sent` sets `next_touch`; `--event <name>` picks another row. `cc.py
 - `references/people.md`: search recipes for hiring managers, founders and alumni; source rules.
 - `references/openers.md`: structure, phase asks, examples, character limits.
 - `references/writing-rules.md`: voice, concrete asks, outcome numbers, why-us answers, vetting.
-- `references/browser-apply.md`: the Claude in Chrome playbook for forms and LinkedIn staging.
+- `references/browser-apply.md`: the Claude in Chrome playbook for forms (Greenhouse, Lever, Ashby
+  mechanics) and LinkedIn staging.
+- `references/apply-loop.md`: the touch, apply, email, measure cycle and its runbook.
+- `references/cover-letter.md`: the cover-letter format and build procedure (`templates/cover_letter_template.tex`).
 - `references/vault.md`: folder layout, note schemas, JSON formats, statuses.
 - Tests: `scripts/test_cc.py` (`python3 -I scripts/test_cc.py`), runs on a temp vault and config.

@@ -15,10 +15,12 @@ company or person notes.
   Data/Company Follows.csv      optional seed list
   Application Tracker.md        hand-kept table (cc.py import-tracker reads it)
   Standard Answers.md           every repeated form answer
+  Story Bank.md                 STAR stories with a lesson line: the source for every essay
   Next Session.md               the handoff note, read first each session
   Connectors.md                 people who can make intros
   Target Companies.md           optional list of companies the user already wants
-  Templates/                    reference copies of the Company, Person and Form Prep formats
+  Templates/                    the Company, Person, Form Prep and Apply Loop Batch formats, and
+                                cover_letter_template.tex
 <fact_sheet> = Career/Resume/Fact Sheet.md
 <resume_dir> = Career/Resume/Ready to Send   upload-ready PDFs only
 <people> = People/<Full Name>.md              career contacts (cc.py upsert-person)
@@ -41,6 +43,7 @@ not required; `cc.py status` and `cc.py due` print the same information.
 | `fit`, `stage`, `last_round`, `hq`, `home_region`, `best_role`, `roles_open`, `signal`, `signal_date`, `warm`, `lane`, `sector`, `domain`, `updated` | skill | overwritten each run when provided |
 | `status`, `priority`, `next_action`, `next_date` | user | set only when empty; `--force-human` only if they asked |
 | `outreach`, `last_contact`, `next_touch` (people) | user | set only when empty |
+| `channel`, `sent_on`, `accepted_on`, `email_drafted`, `email_on`, `replied_on`, `replied_via`, `proof`, `tier` (people) | user, via `cc.py mark` | written only by `mark` on the user's say-so; read by `loop` and `metrics` |
 | `<!-- cc:x -->` blocks | skill | replaced (signals and people are merged, log is appended) |
 | `## Notes` and anything outside blocks | user | never touched |
 
@@ -49,6 +52,13 @@ Person `outreach`: not-contacted, drafted, sent, replied, meeting, dormant, clos
 other value. When the user says they sent something, run `cc.py mark --person X --outreach sent` (sets
 `last_contact`, `next_touch` from the cadence table, and the company `status: contacted` if it was
 `research` or `reach-out`). When they say they applied, run `cc.py applied`.
+
+Apply Loop flags on `mark --person X` (`apply-loop.md`): `--channel note|inmail|open-profile|email|text|intro`
+(first touch; `sent_on` is set once on the first `--outreach sent` and never moves), `--accepted`
+(`accepted_on`), `--email drafted|sent` (`email_drafted`, `email_on`; `sent` also sets `last_contact` and
+`next_touch` 7 days out), `--replied-via linkedin|email|text|phone` (`replied_via`, and `replied_on` if
+empty), `--proof <tag>` (a `[[proofs]]` tag from the config; otherwise `metrics` infers it from the sent
+draft) and `--tier 1|2|3`. `cc.py lint` flags a `channel` outside that list.
 
 ## Applications block (`cc.py applied`)
 
