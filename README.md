@@ -3,8 +3,9 @@
 A Claude Code skill that runs a new-grad or early-career job search out of a folder of markdown notes.
 It finds companies with fresh signals, sweeps public job boards for new roles, vets and scores them
 against your own lanes, names the right people to contact with a source for every name, drafts short
-openers and form answers that only use numbers you have verified, fills application forms in Chrome up
-to the Submit button, and keeps your pipeline and follow-up dates in your vault.
+openers, essays and cover letters that only use numbers you have verified, fills application forms in
+Chrome up to the Submit button, follows up by email three days after you apply, and measures what gets
+replies so each batch is better than the last. Your pipeline and follow-up dates live in your vault.
 
 You click every Submit and every Send. Claude never does.
 
@@ -15,10 +16,12 @@ You click every Submit and every Send. Claude never does.
 | "what got posted this week" | `cc.py sweep` reads every board in your `ats.tsv` (about 140 public Greenhouse, Lever, Ashby and BambooHR boards ship with the kit), keeps business roles posted in the last 7 days that ask for at most 2 years, and Claude vets and ranks them |
 | "find me roles" | Claude finds companies that raised, launched or posted in the last 60 days, pulls their open roles, scores each 0 to 100 and writes one note per company |
 | "who should I reach out to at Acme" | warm paths from your LinkedIn export and people notes first, then the hiring manager, a founder, alumni, a recruiter, each with a source URL |
-| "draft openers for Jane" | a connection note and a message: one dated hook from the company, one verified fact about you, one concrete ask |
-| "prep the form for this posting" | the live form questions, answers from your Standard Answers note, why-us skeletons with slots for your own words |
-| "fill it" | Claude in Chrome fills the form, reads every field back, and stops before Submit |
-| "I applied to Acme", "sent Jane" | logs it and sets follow-up dates from one cadence table |
+| "draft openers for Jane" | a connection note and a message: your take on one dated thing the company did, one verified fact about you, and "Would you have 10 minutes for a call on X?" |
+| "prep the form for this posting" | the live form questions (roles that require a transcript are flagged), answers from Standard Answers, essays written in full from your Story Bank, a cover letter |
+| "fill it" | Claude in Chrome fills up to five forms in tabs, attaches resume and cover letter, reads every field back, and stops before Submit |
+| "run the apply loop" | `cc.py loop` shows who needs a LinkedIn note first, whose day-3 follow-up email is due, and what applied cold; Claude drafts the emails |
+| "I applied to Acme", "sent Jane" | checks your inbox for the confirmation, logs it with the channel, and sets follow-up dates from one cadence table |
+| "what's working" | `cc.py metrics`: reply, accept and screen rates by week, channel, person kind, proof point and opener style |
 | "what's due" | one list of follow-ups, sorted by date |
 
 The CLI (`scripts/cc.py`) is one stdlib-only Python file. It does every read and write of the vault,
@@ -27,42 +30,55 @@ overwrites the fields and sections that belong to you.
 
 ## Quick start: paste this into Claude Code
 
-Open a new Claude Code session in any folder and paste the prompt below. Fill in the three lines in
-brackets first, or delete them and Claude will ask. Claude installs the kit, runs the checks, then
-interviews you to fill in your config, Fact Sheet and Standard Answers. It asks before anything that
-would send, submit or spend money.
+Open a new Claude Code session in any folder and paste the prompt below. Fill in the lines in brackets
+first, or delete them and Claude will ask. Claude installs the kit, runs the checks, interviews you to
+fill in your config, Fact Sheet, Standard Answers and Story Bank, then takes you through your first
+Apply Loop batch. It asks before anything that would send, submit or spend money.
 
 ```text
-Set up claude-job-search-kit for my job search and get me to my first shortlist.
+Set up claude-job-search-kit for my job search and take me from zero to my first Apply Loop batch.
 
 About me: [name, school, degree(s), graduation month and year, earliest start date]
 What I'm looking for: [role types, industries, cities or regions, and how much of my list should be in my home region]
 My notes folder: [path to an Obsidian vault or any folder, e.g. ~/Documents/Job Search]
+LinkedIn: [free or Premium / Sales Navigator]
 
 Do it in this order, and stop and show me the result after each step:
 1. Clone https://github.com/matis-tbc/claude-job-search-kit into ~/claude-job-search-kit and copy
    skill/career-coach into ~/.claude/skills/career-coach. If that skill folder already exists, ask
    before replacing it.
 2. Run `cc.py init --vault-path "<my notes folder>"`, then fill config.toml from what I told you
-   above. Ask me only for the values you can't fill. Show me the finished config.
+   above (set [linkedin] premium to match my account). Ask me only for the values you can't fill.
+   Show me the finished config.
 3. Run `cc.py setup`, `cc.py doctor --net` and `test_cc.py`. Tell me if anything fails.
-4. Read the README and skill/career-coach/SKILL.md so you know the rules: you never send or
-   submit anything, no paid tools, numbers about me only from verified Fact Sheet rows, a source
-   URL for every person, never guess an email, no em dashes.
+4. Read the README, skill/career-coach/SKILL.md and references/apply-loop.md so you know the rules:
+   you never send or submit anything, no paid tools, numbers about me only from verified Fact Sheet
+   rows, a source URL for every person, never guess an email, no em dashes, and you do every step
+   yourself except my Submit and Send clicks.
 5. Interview me for the Fact Sheet. Ask for my resume (I'll paste it or give you the PDF path),
    then go line by line: one row per number, title and date. Each row starts blocked, and I mark it
    verified or decided. Keep it moving: skip small numbers that will never be printed.
 6. Fill Standard Answers with me: contact details, every degree as its own entry, GPA, start date,
-   work authorization, sponsorship, relocation, EEO (decline by default) and my work history with
-   exact titles and dates.
-7. Ask where my upload-ready resume PDFs are and record their exact file names.
-8. Run the first sweep ("what got posted this week"), skip anything that requires or prefers 3+
-   years, and give me a ranked shortlist of 5 with one line of reasoning each.
-9. Finish by writing the Next Session note so my next session can start with "where am I".
+   work authorization, sponsorship, relocation, transcript policy, EEO (decline by default) and my
+   work history with exact titles and dates.
+7. Fill the Story Bank with me: 5 real STAR stories (a sales or persistence story, a failure, a team
+   conflict, a crisis, something I built), each with a one-line lesson. Then add one [[proofs]] tag
+   per proof point to the config.
+8. Ask where my upload-ready resume PDFs are and record their exact file names. If I have TeX
+   (tectonic or pdflatex), build one cover letter from the template so I can see the format.
+9. Run the first sweep ("what got posted this week"), skip anything that asks for more experience
+   than I have or requires a transcript, and give me a ranked shortlist of 5 with one line of
+   reasoning each.
+10. Run my first Apply Loop batch on the roles I pick: name 1 or 2 people per role (warm paths
+   first, then the manager who owns the team), draft and check the LinkedIn notes, write the essays
+   and cover letters, fill the forms in Chrome up to Submit if the extension is connected, and draft
+   the day-3 follow-up emails into a batch note. I click every Submit and Send and tell you what I sent.
+11. Finish by writing the Next Session note, with the date the follow-up emails go out and the date
+   to run `cc.py metrics`.
 ```
 
-After that, use the phrases in the table above. A good second session is "prep the form for #1 and
-find me 2 people".
+After that, use the phrases in the table above. A good second session is "run the apply loop": it
+starts from `cc.py loop --due --days 3` and picks up exactly where the last batch left off.
 
 ## Requirements
 
@@ -72,6 +88,10 @@ find me 2 people".
   dashboards), but any plain folder of markdown files works.
 - Optional: the [Claude in Chrome](https://claude.ai/chrome) extension, for form filling and LinkedIn
   staging.
+- Optional: an email connector (for example Gmail) in Claude, so Claude can find application
+  confirmations and replies and put follow-up emails into your drafts. Claude only creates drafts.
+- Optional: TeX ([tectonic](https://tectonic-typesetting.github.io) or pdflatex) to build cover letters
+  from the template.
 
 ## Install
 
@@ -92,8 +112,9 @@ find me 2 people".
    This writes `~/.config/job-search-kit/config.toml` from `config.example.toml` and never overwrites an
    existing file. Open it and replace every example value: your name, school, degrees, graduation and
    start date, the lanes you are aiming for, your home region and how much of each shortlist should be
-   there (`home_region_share`, `0` turns it off), your search phases and dates, and whether you have
-   LinkedIn Premium (300-character notes) or a free account (200).
+   there (`home_region_share`, `0` turns it off), your search phases and dates, whether you have
+   LinkedIn Premium (300-character notes, written at 250 to 300) or a free account (200), and one
+   `[[proofs]]` tag per proof point you cite, so `cc.py metrics` can tell which ones get replies.
 
    To keep the config somewhere else, set `JOB_KIT_CONFIG=/path/to/config.toml` or pass `--config`.
 
@@ -103,8 +124,9 @@ find me 2 people".
    python3 -I ~/.claude/skills/career-coach/scripts/cc.py setup
    ```
 
-   This creates the folders, copies the templates (Fact Sheet, Standard Answers, Application Tracker,
-   Next Session, Connectors, and reference copies of the Company, Person and Form Prep formats) and
+   This creates the folders, copies the templates (Fact Sheet, Standard Answers, Story Bank, Application
+   Tracker, Next Session, Connectors, and reference copies of the Company, Person, Form Prep and Apply
+   Loop Batch formats plus the cover-letter template) and
    seeds `Data/ats.tsv` with the public job boards. It never overwrites a file, so it is safe to run on
    an existing vault. Every path is set in `[paths]` in the config.
 
@@ -112,7 +134,7 @@ find me 2 people".
 
    ```bash
    python3 -I ~/.claude/skills/career-coach/scripts/cc.py doctor        # add --net to probe the board APIs
-   python3 -I ~/.claude/skills/career-coach/scripts/test_cc.py          # 38 tests on a temp vault
+   python3 -I ~/.claude/skills/career-coach/scripts/test_cc.py          # 46 tests on a temp vault
    ```
 
 5. **Optional: Claude in Chrome.** Install the extension, sign in, and allow it on the job boards and
@@ -134,16 +156,20 @@ request.
    defend it in an interview). Only those rows can appear in anything Claude writes. Retired numbers
    stay as `blocked` rows so old phrasings keep getting caught.
 2. **Standard Answers (5 minutes).** Contact details, school, every degree, GPA, start date, work
-   authorization, sponsorship, relocation, the EEO default (decline), and your work history with exact
-   titles and dates.
-3. **Resumes.** Put upload-ready PDFs in the resume folder from your config. Claude recommends only
+   authorization, sponsorship, relocation, transcript policy, the EEO default (decline), and your work
+   history with exact titles and dates.
+3. **Story Bank (15 minutes).** Five real STAR stories with a one-line lesson each. Claude writes every
+   essay from these, a different story per question, so this is what makes applications fast.
+4. **Resumes.** Put upload-ready PDFs in the resume folder from your config. Claude recommends only
    those files, by exact name.
-4. **First sweep.** Say "what got posted this week". Claude sweeps the boards, skips anything that
+5. **First sweep.** Say "what got posted this week". Claude sweeps the boards, skips anything that
    requires or prefers 3+ years, and gives you a ranked shortlist with the reasons.
-5. **One role end to end.** Pick one. Say "prep the form and find me 2 people". You get a Form Prep note
-   with every answer and a why-us skeleton, plus two person notes with drafted openers. Fill the
-   bracketed slots in your own words, submit, then say "submitted" and "sent Jane".
-6. **Next time**, start with "where am I" or "what's due". Claude reads the Next Session note first and
+6. **First Apply Loop batch.** Pick a few roles. Say "run the apply loop on these". For each role Claude
+   names 1 or 2 people and drafts their notes, writes the essays and a cover letter, fills the form, and
+   drafts the day-3 follow-up email. You read, click Submit and Send, and say "sent Jane". The full
+   cycle is in `skill/career-coach/references/apply-loop.md`.
+7. **Next time**, start with "where am I", "what's due" or "run the apply loop". Every week, say "what's
+   working" for the metrics. Claude reads the Next Session note first and
    rewrites it at the end of long sessions, so nothing depends on an old chat.
 
 Add your own target companies' boards at any time: "add Acme's job board" runs `cc.py jobs` with their
@@ -166,8 +192,8 @@ These are enforced in the skill instructions and, where code can enforce them, i
 - **Your edits are yours.** The script rewrites only its own marked blocks and machine fields; your
   status, next actions, follow-up dates and Notes sections are never overwritten. Folders listed in
   `[paths] protected` are never edited.
-- **In the browser**, Claude stops at every login, CAPTCHA, attestation, payment and Submit, keeps at
-  most 3 to 5 tabs open, and never navigates a tab you handed over.
+- **In the browser**, Claude stops at every login, CAPTCHA, attestation, payment and Submit, never
+  presses Enter in a form field, keeps at most 5 tabs open, and never navigates a tab you handed over.
 
 ## Layout
 
@@ -179,7 +205,8 @@ claude-job-search-kit/
     SKILL.md                     what Claude reads
     config.example.toml          copied by `cc.py init`
     data/ats.tsv                 seed list of public job boards
-    references/                  sourcing, scoring, people, openers, writing rules, browser playbook, vault formats
+    references/                  sourcing, scoring, people, openers, writing rules, apply loop, cover letters,
+                                 browser playbook, vault formats
     scripts/cc.py                the CLI (stdlib only)
     scripts/test_cc.py           tests on a temp vault and config
     templates/                   vault notes copied by `cc.py setup`
